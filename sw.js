@@ -7,34 +7,34 @@
 const BUILD_ID = 'dev';
 const CACHE = `trailpack-${BUILD_ID}`;
 const SHELL = [
-  '/',
-  '/index.html',
-  '/styles/app.css',
-  '/styles/activities.css',
-  '/styles/trail.css',
-  '/src/main.js',
-  '/src/register-sw.js',
-  '/src/build-id.js',
-  '/src/api/client.js',
-  '/src/app/state.js',
-  '/src/app/router.js',
-  '/src/app/ui.js',
-  '/src/app/session.js',
-  '/src/i18n/format.js',
-  '/src/store/idb.js',
-  '/src/store/files.js',
-  '/src/sync/engine.js',
-  '/src/screens/access.js',
-  '/src/screens/create.js',
-  '/src/screens/login.js',
-  '/src/screens/trail.js',
-  '/src/screens/me.js',
-  '/src/screens/admin.js',
-  '/src/screens/language.js',
-  '/src/screens/notfound.js',
-  '/manifest.webmanifest',
-  '/icons/mark.svg',
-  '/config.json',
+  './',
+  './index.html',
+  './styles/app.css',
+  './styles/activities.css',
+  './styles/trail.css',
+  './src/main.js',
+  './src/register-sw.js',
+  './src/build-id.js',
+  './src/api/client.js',
+  './src/app/state.js',
+  './src/app/router.js',
+  './src/app/ui.js',
+  './src/app/session.js',
+  './src/i18n/format.js',
+  './src/store/idb.js',
+  './src/store/files.js',
+  './src/sync/engine.js',
+  './src/screens/access.js',
+  './src/screens/create.js',
+  './src/screens/login.js',
+  './src/screens/trail.js',
+  './src/screens/me.js',
+  './src/screens/admin.js',
+  './src/screens/language.js',
+  './src/screens/notfound.js',
+  './manifest.webmanifest',
+  './icons/mark.svg',
+  './config.json',
 ];
 
 self.addEventListener('install', (event) => {
@@ -76,10 +76,10 @@ self.addEventListener('fetch', (event) => {
       fetch(req)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put('/index.html', copy));
+          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
           return res;
         })
-        .catch(() => caches.match('/index.html')),
+        .catch(() => caches.match('./index.html')),
     );
     return;
   }

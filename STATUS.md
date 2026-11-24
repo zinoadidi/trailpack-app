@@ -8,7 +8,7 @@ Honest notes: what runs, what was tested and how, and what is missing.
 
 ### Done
 
-- Public repository basics: README, MIT `LICENSE`, secret-safe `.gitignore`, and Azure Static Web Apps deploy script. The script injects runtime API config and the CSP origin from environment values.
+- Public repository basics: README, MIT `LICENSE`, secret-safe `.gitignore`, and a GitHub Pages workflow (`.github/workflows/pages.yml`) with `scripts/build-pages.mjs`, which writes the runtime API config and the CSP origin from the `API_BASE` repository variable.
 - Practice supports the existing mixed bite and resume flow plus standalone rounds for available activities in the active Pack. Answers use the study mastery rules, save progress per answer, and save an attempt on completion.
 - Weak review switches to an activity chooser backed only by weak facts. Practice result strings are under `ship.*` in all five catalogues; the non-English draft keys are marked for review.
 
@@ -63,7 +63,7 @@ Four themes copied one for one from `design/visuals.html`: `dark` (Grape Night),
 
 ### Known gaps and decisions for the next milestone
 
-- `staticwebapp.config.json` uses an `__API_ORIGIN__` placeholder for `connect-src`; `scripts/deploy-frontend.sh` replaces it at build time. A real deployment remains unverified.
+- The Pages build adds the CSP as a meta tag (Pages cannot send headers), so `frame-ancestors` is not enforced.
 - The mock API has no PPTX, PDF, DOCX or EML extraction; it answers `415` for those so the real backend is not confused with the mock.
 - The mock's LLM replies are fixed JSON shapes for `ingest_map`, `generate`, `score`, `teach`, `lens` and `translate`. They are a stand in until M2 and M3 build the real prompts.
 - Practice and Library are implemented; Talk was not covered by this handoff.

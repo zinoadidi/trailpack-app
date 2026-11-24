@@ -14,3 +14,4 @@ notes/
 private-notes/
 *.private.md
 .deploy.*/
+_site

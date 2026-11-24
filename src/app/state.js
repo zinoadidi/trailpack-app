@@ -64,7 +64,7 @@ export function t(key, values) {
 
 /** Load config.json with no cache, so a deploy changes the API base at once. */
 export async function loadConfig(fetchImpl = globalThis.fetch) {
-  const res = await fetchImpl('/config.json?t=' + Date.now(), { cache: 'no-store' });
+  const res = await fetchImpl('config.json?t=' + Date.now(), { cache: 'no-store' });
   if (!res.ok) throw new Error('config.json missing');
   const cfg = await res.json();
   if (!cfg.apiBase || !/^https?:\/\//.test(cfg.apiBase)) throw new Error('apiBase must be a full http(s) URL');

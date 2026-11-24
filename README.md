@@ -27,15 +27,20 @@ The only deployment specific value is the API base URL. It is read at runtime fr
 { "apiBase": "https://example.invalid/api/v1" }
 ```
 
-The committed value is a placeholder. At deploy time it is replaced with the real backend URL. The app fetches `config.json` with no cache, so changing it takes effect on the next load without a rebuild.
+The committed value is a placeholder. The Pages build replaces it with the real backend URL. The app fetches `config.json` with no cache, so changing it takes effect on the next load without a rebuild.
 
 All model calls go through the backend. There is no provider key in the browser and none in this repository.
 
-`staticwebapp.config.json` holds the hosting rules: navigation fallback to `index.html`, a strict Content Security Policy, and security headers. Its policy has an `__API_ORIGIN__` placeholder for the API origin, filled in at deploy time alongside `config.json`.
+## Deploy to GitHub Pages
 
-## Deploy to Azure Static Web Apps
+The site is static and every path is relative, so it works under a project subpath such as `https://<user>.github.io/trailpack-app/`.
 
-Install the SWA CLI, then set `API_BASE`, `SWA_URL` and `SWA_CLI_DEPLOYMENT_TOKEN` in your environment and run `scripts/deploy-frontend.sh`. `SWA_ENV` defaults to `production`; `BUILD_ID` is optional. The script builds in a temporary copy, injects only the backend URL, and never writes the deployment token to the repository. Keep the token in your secret manager, not in a file or commit.
+1. In the repository settings, set Pages to deploy from GitHub Actions.
+2. Add a repository variable `API_BASE` with your backend's public address, for example `https://api.example.com/api/v1` (not a secret).
+3. Push to `main`. The `pages` workflow runs the tests, runs `node scripts/build-pages.mjs`, and publishes the result.
+4. On your backend, allow the site's origin (for example `https://<user>.github.io`) in its CORS setting.
+
+`scripts/build-pages.mjs` copies the site into `_site`, writes `config.json` from `API_BASE`, stamps the build id, and adds a strict Content Security Policy to `index.html` as a meta tag, because Pages cannot send response headers. You can run it locally with `API_BASE=... node scripts/build-pages.mjs`.
 
 ## Build id and caching
 
@@ -65,7 +70,7 @@ index.html              shell, no inline app logic
 config.json             API base URL (placeholder)
 manifest.webmanifest    PWA manifest
 sw.js                   service worker, BUILD_ID names the cache
-staticwebapp.config.json hosting rules, CSP, security headers
+scripts/build-pages.mjs  builds the GitHub Pages site (config.json, build id, CSP meta tag)
 icons/                  logo mark, generated PNG icons
 styles/app.css          all styles, dark and light tokens
 src/main.js             boot: config, store, i18n, session, router
