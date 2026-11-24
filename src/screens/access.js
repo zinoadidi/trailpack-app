@@ -8,8 +8,19 @@ import { setPref } from '../app/prefs.js';
 import { LANGS } from '../i18n/format.js';
 
 const CODE_RE = /^TRL-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/;
+// Hand-made codes (like the ones the owner types in the Admin screen): same
+// rule as the server. Lowercase letters, digits, dashes, 6 to 40 long, and
+// never starting with "trl" so they cannot be mistaken for a generated code.
+const CUSTOM_RE = /^[a-z0-9][a-z0-9-]{5,39}$/;
+
+function customCode(input) {
+  const s = String(input || '').trim().toLowerCase();
+  return CUSTOM_RE.test(s) && !s.startsWith('trl') ? s : null;
+}
 
 export function normaliseCode(input) {
+  const custom = customCode(input);
+  if (custom) return custom;
   const raw = String(input || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
   const body = raw.startsWith('TRL') ? raw.slice(3) : raw;
   if (body.length !== 12) return String(input || '').trim().toUpperCase();
@@ -17,7 +28,7 @@ export function normaliseCode(input) {
 }
 
 export function isValidCode(code) {
-  return CODE_RE.test(normaliseCode(code));
+  return Boolean(customCode(code)) || CODE_RE.test(normaliseCode(code));
 }
 
 export default function access() {
