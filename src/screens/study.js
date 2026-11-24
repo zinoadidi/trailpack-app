@@ -15,7 +15,7 @@
 import { state, t } from '../app/state.js';
 import { h, announce, toast, confirmDialog } from '../app/ui.js';
 import { navigate } from '../app/router.js';
-import { resolveActivePack } from '../study/store.js';
+import { resolveActivePack, setActivePack, loadPackBundle, activePackId } from '../study/store.js';
 import { loadProgress, saveProgressMany, loadPlan, loadMixerSettings, loadStudyMeta, saveStudyMeta, saveAttempts } from '../study/progress-store.js';
 import { startSession, studySelection, studySourceContext, currentStep, answerStep, stepVariant, sessionAttempts, finishSession, stepPlayable } from '../study/session.js';
 import { renderActivity } from './activities/index.js';
@@ -44,8 +44,25 @@ export default function study() {
   let activity = null;
   function cleanupActivity() { activityEpoch++; activity?.destroy?.(); activity = null; }
 
-  async function boot() {
-    const bundle = await resolveActivePack().catch(() => null);
+  async function boot(requestedPack = null) {
+    // `#/study?pack=<id>`: study this Pack, whatever the active choice was.
+    // Library cards and "Study this Pack" both ask for it by id, so the bite is
+    // the one the learner pressed.
+    let bundle;
+    if (requestedPack) {
+      bundle = await loadPackBundle(requestedPack).catch(() => null);
+      if (!bundle) {
+        // The Pack named in the link is not on this device (deleted here, or
+        // only on another device). Studying some other Pack instead would be
+        // the wrong bite under the right button, so say so and stop.
+        body.append(missingState());
+        return;
+      }
+      const active = await activePackId().catch(() => null);
+      if (active !== requestedPack) await setActivePack(requestedPack).catch(() => null);
+    } else {
+      bundle = await resolveActivePack().catch(() => null);
+    }
     if (closed) return;
     if (!bundle || !bundle.facts || !bundle.facts.length) {
       body.append(emptyState());
@@ -79,8 +96,19 @@ export default function study() {
     }
     const trailProfile = await readProfileSafe();
     if (closed) return;
-    state.studySession = { session, pack, facts, trail, trailProfile, requestedCamp: params.get('camp') || null };
+    state.studySession = { session, pack, facts, trail, trailProfile, requestedPack: requestedPack || pack.id, requestedCamp: params.get('camp') || null };
     paint();
+  }
+
+  /** The Pack asked for by id is not here. */
+  function missingState() {
+    return h(
+      'section',
+      { class: 'panel stack', role: 'status' },
+      h('h1', { class: 'h1' }, t('study.title')),
+      h('p', { class: 'mut' }, t('study.packMissing')),
+      h('div', { class: 'row wrap', style: { gap: '8px' } }, h('a', { class: 'btn p', href: '#/library' }, t('nav.library')), h('a', { class: 'btn', href: '#/study' }, t('study.studyActive'))),
+    );
   }
 
   function emptyState() {
@@ -285,14 +313,19 @@ export default function study() {
     el: root,
     title: t('study.title'),
     async mount() {
-      const requestedCamp = new URLSearchParams(location.hash.split('?')[1] || '').get('camp');
+      const params = new URLSearchParams(location.hash.split('?')[1] || '');
+      const requestedCamp = params.get('camp');
+      const requestedPack = params.get('pack');
+      // A bite asked for by id replaces any running bite from another Pack.
+      const held = state.studySession;
+      if (requestedPack && held && held.pack && held.pack.id !== requestedPack) state.studySession = null;
       if (requestedCamp && state.studySession && state.studySession.requestedCamp !== requestedCamp) {
         const ok = await confirmDialog({ title: t('study.leaveTitle'), body: t('study.leaveBody'), confirm: t('study.leave'), cancel: t('study.stay') });
         if (closed) return;
         if (!ok) { navigate('/', { replace: true }); return; }
         state.studySession = null;
       }
-      if (!state.studySession) await boot();
+      if (!state.studySession) await boot(requestedPack);
       else paint();
     },
     destroy() { closed = true; cleanupActivity(); },

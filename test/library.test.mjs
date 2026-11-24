@@ -34,10 +34,11 @@ test('accepted file types cover the contract and reject the rest', () => {
   assert.ok(isAccepted('Deck.PPTX'));
   assert.ok(isAccepted('handbook.pdf', 'application/pdf'));
   assert.ok(isAccepted('pasted', 'text/plain'));
-  assert.equal(isAccepted('photo.png', 'image/png'), false);
-  assert.equal(rejectReason('photo.png', 'image/png'), 'ingest.unsupported');
+  for (const name of ['photo.png', 'photo.jpg', 'photo.jpeg', 'photo.webp']) assert.ok(isAccepted(name));
+  assert.equal(rejectReason('photo.svg', 'image/svg+xml'), 'ingest.unsupported');
   assert.equal(rejectReason('notes.txt'), null);
   assert.ok(acceptAttribute().includes('.pdf'));
+  assert.ok(acceptAttribute().includes('.png'));
 });
 
 test('extensionOf lowercases and handles no extension', () => {

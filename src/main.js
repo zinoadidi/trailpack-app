@@ -27,6 +27,7 @@ const screens = {
   '/library': () => import('./screens/library.js'),
   '/learn': () => import('./screens/discover.js'),
   '/library/review': () => import('./screens/review.js'),
+  '/library/review/questions': () => import('./screens/review-questions.js'),
   '/404': () => import('./screens/notfound.js'),
 };
 

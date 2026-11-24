@@ -1,6 +1,6 @@
 // Practice lets a learner drill one available activity or start a mixed bite.
 import { state, t } from '../app/state.js';
-import { h } from '../app/ui.js';
+import { h, append } from '../app/ui.js';
 import { navigate } from '../app/router.js';
 import { ACTIVITIES } from '../study/activities.js';
 import { dueFacts } from '../study/mastery.js';
@@ -33,7 +33,9 @@ export default function practice() {
     const fresh = bundle.facts.filter((fact) => !progress[fact.id] || progress[fact.id].state === 'new').length;
     const minutes = 4;
     const steps = biteLength(minutes);
-    box.append(
+    // append() drops null children; a raw box.append() would print the literal
+    // word "null" where an optional panel is missing.
+    append(box, [
       h('div', { class: 'panel row' }, h('div', {}, h('span', { class: 'mut small' }, t('practice.activePack')), h('b', {}, bundle.pack.title)), h('a', { class: 'btn', href: '#/library' }, t('practice.changePack'))),
       state.studySession ? h('section', { class: 'panel stack' }, h('b', {}, t('practice.resume')), h('p', { class: 'mut small' }, t('practice.resumeLine', { step: state.studySession.session.index, total: state.studySession.session.steps.length })), h('button', { class: 'btn p block', onclick: () => navigate('/study') }, t('practice.resume'))) : null,
       h('section', { class: 'panel stack' }, h('button', { class: 'btn p block', onclick: () => startBite() }, t('practice.start')), h('p', { class: 'mut small' }, t('practice.startHelp', { minutes, steps }))),
@@ -45,15 +47,18 @@ export default function practice() {
         row(t('practice.due'), t('practice.dueLine', { count: due.due.length }), 'a'),
         row(t('practice.weak'), t('practice.weakLine', { count: weak }), 'f'),
         row(t('practice.new'), t('practice.newLine', { count: fresh }), 'v')),
-    );
+    ]);
   }
 
   function row(label, value, tone) {
     return h('div', { class: 'row' }, h('span', {}, label), h('span', { class: 'chip ' + tone }, value));
   }
 
-  function startRound(type, facts, progress) {
-    activeRound = renderPracticeRound(box, { facts, progress, type, onExit: () => paint() });
+  // The third name is the progress map the round starts from. It must not be
+  // called `progress` (facts and progress), or it would shadow the one paint()
+  // loaded and every drill would run over facts with no progress at all.
+  function startRound(type, facts, fromProgress) {
+    activeRound = renderPracticeRound(box, { facts, progress: fromProgress, type, onExit: () => paint() });
   }
 
   function startBite() {

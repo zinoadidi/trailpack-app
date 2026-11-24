@@ -22,7 +22,7 @@ import { normaliseMap, mergeIntoPack, applyReviewEdits, summarisePack, safeId } 
 import { batches, LIMITS, readGenerateReply } from './prompts.js';
 
 /** Files the real backend extracts and the mock can read (mock: txt, md, html). */
-export const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'pptx', 'txt', 'md', 'markdown', 'html', 'htm', 'eml'];
+export const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'pptx', 'txt', 'md', 'markdown', 'html', 'htm', 'eml', 'png', 'jpg', 'jpeg', 'webp'];
 
 /**
  * What the file picker and the drop zone accept. Kept here so a test can check
@@ -35,7 +35,7 @@ export const extensions = ACCEPTED_EXTENSIONS.filter((ext) => ext !== 'htm' && e
 
 export function acceptAttribute() {
   const types = ACCEPTED_EXTENSIONS.map((ext) => '.' + ext);
-  types.push('text/plain', 'text/markdown', 'text/html', 'application/pdf');
+  types.push('text/plain', 'text/markdown', 'text/html', 'application/pdf', 'image/png', 'image/jpeg', 'image/webp');
   return types.join(',');
 }
 

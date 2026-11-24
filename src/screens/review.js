@@ -17,6 +17,38 @@ import { renderReplacementOffers } from './replacement-offer.js';
 import { beginAdditionDraft } from '../study/additions.js';
 import { topicEditor } from './review-edit.js';
 
+/** Backend reasons with a sentence of their own. Anything else falls back to
+ *  `library.sourceError.unknown` and still shows the raw code. */
+export const SOURCE_ERROR_KEYS = {
+  too_many_visual_pages: 'library.sourceError.too_many_visual_pages',
+  invalid_image: 'library.sourceError.invalid_image',
+  vision_empty: 'library.sourceError.vision_empty',
+  provider_unavailable: 'library.sourceError.provider_unavailable',
+  timeout: 'library.sourceError.timeout',
+};
+
+/**
+ * What to remember about a failed read: the backend code (or `error`), plus
+ * whatever it said. `detail` is the retry hint the API sends for some codes.
+ */
+export function sourceErrorOf(err) {
+  return {
+    code: (err && err.code) || 'error',
+    message: String((err && (err.message || err.code)) || ''),
+    status: (err && err.status) || 0,
+    detail: (err && err.detail) || null,
+  };
+}
+
+/** The sentence for a stored source error, or null when there is none. */
+function sourceErrorMessage(error) {
+  if (!error) return null;
+  // Sources saved before errors were objects hold the bare code string.
+  if (typeof error === 'string') error = { code: error };
+  if (SOURCE_ERROR_KEYS[error.code]) return t(SOURCE_ERROR_KEYS[error.code]);
+  return t('library.sourceError.unknown', { code: error.code || 'error' });
+}
+
 export default function review(mm) {
   let packId = new URLSearchParams((location.hash || '').split('?')[1] || '').get('id');
   const root = h('div', { class: 'stack' });
@@ -34,6 +66,16 @@ export default function review(mm) {
   let replacementJournal = null;
   let saveFailed = false;
   let running = false;
+
+  /**
+   * End a busy stretch. Every path that sets `running = true` must come through
+   * here, or files chosen while it ran would sit in the queue for good: the
+   * pump only resumes from here, not from each caller's own finally.
+   */
+  function release() {
+    running = false;
+    pumpUploads();
+  }
 
   const ingest = () => makeIngest({ api: state.api, files: state.files });
 
@@ -136,7 +178,7 @@ export default function review(mm) {
     try {
       extraction = suppliedExtraction || await ingest().extract(source, bytes);
     } catch (err) {
-      pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'reading-failed', error: err.code || 'error' } : s));
+      pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'reading-failed', error: sourceErrorOf(err) } : s));
       await persist({ draftToo: true });
       return false;
     }
@@ -162,7 +204,7 @@ export default function review(mm) {
         }
       }
     } catch (err) {
-      pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapping-failed', error: err.code || 'error' } : s));
+      pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapping-failed', error: sourceErrorOf(err) } : s));
       await persist({ draftToo: true });
       return false;
     }
@@ -173,31 +215,93 @@ export default function review(mm) {
     return persist({ draftToo: true });
   }
 
-  async function addFiles(fileList) {
-    if (running) return;
+  // Files chosen while one is still being read are queued, not dropped: an
+  // upload of five documents often comes as two picks, and the second one used
+  // to vanish without a word (`if (running) return`). Each file carries its own
+  // promise, so every caller can await its own files and nothing is read twice.
+  const uploadQueue = [];
+  // The files this screen has already taken in. A browser can fire `change`
+  // twice for one pick; those must not become two sources.
+  const takenFiles = new WeakSet();
+
+  function addFiles(fileList) {
+    const jobs = [];
+    for (const file of fileList || []) {
+      if (takenFiles.has(file)) continue; // the same pick handed in again
+      takenFiles.add(file);
+      const job = { file };
+      job.done = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
+      uploadQueue.push(job);
+      jobs.push(job.done);
+    }
+    pumpUploads();
+    // The caller (the change handler) must not see a rejection: the screen has
+    // already shown which file failed.
+    return Promise.all(jobs.map((done) => done.catch(() => null)));
+  }
+
+  let pumping = false;
+
+  async function pumpUploads() {
+    // `running` is held by whatever started it (a paste, an import) and is
+    // released through release(), which calls back here.
+    if (running || pumping) return;
+    pumping = true;
     running = true;
     try {
-      for (const file of fileList) {
-        const reason = rejectReason(file.name, file.type);
-        if (reason) {
-          toast(t(reason, { name: file.name }));
-          continue;
+      while (uploadQueue.length) {
+        const job = uploadQueue.shift();
+        try {
+          await readOneFile(job.file);
+          job.resolve();
+        } catch (err) {
+          // The file could not be read at all (disk, permissions). Mark it, so
+          // the learner sees which one, and carry on with the rest.
+          failFile(job.file, err);
+          job.reject(err);
         }
-        const id = sourceId(file.name);
-        const source = newSource({ id, name: file.name, type: file.type || 'application/octet-stream', size: file.size, fileId: id });
-        const previousSources = pack.sources;
-        pack.sources = [...(pack.sources || []), source];
-        if (!(await persist({ draftToo: true }))) { pack.sources = previousSources; return; }
-        render();
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        await readSource(source, bytes);
-        render();
       }
     } finally {
-      running = false;
-      say('');
-      render();
+      pumping = false;
+      if (!uploadQueue.length) {
+        running = false;
+        say('');
+        render();
+      } else {
+        // Something queued while we were finishing: keep going.
+        running = false;
+        pumpUploads();
+      }
     }
+  }
+
+  /** A file that never became a source: it is shown as failed, not spinning. */
+  function failFile(file, err) {
+    const source = (pack.sources || []).find((entry) => entry.name === file.name && entry.state !== 'mapped');
+    const error = sourceErrorOf(err);
+    if (source) {
+      pack.sources = pack.sources.map((entry) => (entry.id === source.id ? { ...entry, state: 'reading-failed', error } : entry));
+    }
+    toast(t('library.sourceError.unknown', { code: error.code }));
+    persist({ draftToo: true }).catch(() => null);
+    render();
+  }
+
+  async function readOneFile(file) {
+    const reason = rejectReason(file.name, file.type);
+    if (reason) {
+      toast(t(reason, { name: file.name }));
+      return;
+    }
+    const id = sourceId(file.name);
+    const source = newSource({ id, name: file.name, type: file.type || 'application/octet-stream', size: file.size, fileId: id });
+    const previousSources = pack.sources;
+    pack.sources = [...(pack.sources || []), source];
+    if (!(await persist({ draftToo: true }))) { pack.sources = previousSources; return; }
+    render();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    await readSource(source, bytes);
+    render();
   }
 
   async function addPaste() {
@@ -216,7 +320,7 @@ export default function review(mm) {
       render();
       await readSource(source, new TextEncoder().encode(text));
     } finally {
-      running = false;
+      release();
       say('');
     }
     render();
@@ -245,7 +349,7 @@ export default function review(mm) {
       if (additionBase) await persist({ draftToo: true });
       else await saveDraft({ pack, topics, facts, edits }).catch(() => null);
     } finally {
-      running = false;
+      release();
       say('');
       render();
     }
@@ -298,7 +402,7 @@ export default function review(mm) {
         if (!(await persist({ draftToo: true }))) return;
         result = await publishReplacementDraft({ pack, topics, facts, edits, additionBase });
       } finally {
-        running = false;
+        release();
       }
       if (!result.ok) {
         replacementJournal = await loadReplacement(pack.id, state.store);
@@ -364,8 +468,13 @@ export default function review(mm) {
       render();
       toast(t(progress.complete ? 'flow.questionsWritten' : 'flow.questionsPartial', progress.complete ? { count: progress.total } : { done: progress.done, total: progress.total }));
     } finally {
-      running = false;
+      release();
     }
+  }
+
+  /** "Open the review": the question sheet for this Pack, a screen of its own. */
+  function openReview(packIdToReview) {
+    navigate('/library/review/questions?id=' + encodeURIComponent(packIdToReview));
   }
 
   function render() {
@@ -417,7 +526,7 @@ export default function review(mm) {
               h('div', { class: 'row' }, h('span', { class: 'mut small' }, t('library.pasteCounter')), h('button', { class: 'btn sm g', type: 'button', onclick: addPaste }, t('library.pasteAdd'))),
             ),
             sourceList(),
-            (pack.sources || []).length ? h('div', { class: 'row' }, h('span', { class: 'mut small' }, t('library.stepHint')), h('button', { class: 'btn p sm', type: 'button', onclick: () => navigate('/library/review?id=' + encodeURIComponent(pack.id) + '&edit=1') }, t('library.openReview'))) : null,
+            (pack.sources || []).length ? h('div', { class: 'row' }, h('span', { class: 'mut small' }, t('library.stepHint')), h('button', { class: 'btn p sm', type: 'button', onclick: () => openReview(pack.id) }, t('library.openReview'))) : null,
           )
         : h('div', { class: 'stack' }, h('p', { class: 'mut' }, t('library.frozenHelp')), replacementJournal?.choice === 'pending' && pack.id === packId ? null : h('button', { class: 'btn p sm', type: 'button', onclick: beginAdding }, t('library.addMaterial'))),
     );
@@ -448,9 +557,20 @@ export default function review(mm) {
         render();
       },
       onMakeActive: async () => {
+        // "Study this Pack" means study it: make it the active Pack and open
+        // the bite. Setting it active and re-rendering this same screen looked
+        // like nothing happened.
         await setActivePack(pack.id);
         toast(t('library.isActive'));
-        render();
+        // An unfinished bite belongs to another Pack; starting this one means
+        // leaving it.
+        if (state.studySession && state.studySession.pack?.id !== pack.id) state.studySession = null;
+        if (state.studySession && state.studySession.pack?.id === pack.id) {
+          navigate('/study');
+          return;
+        }
+        state.studySession = null;
+        navigate('/study?pack=' + encodeURIComponent(pack.id));
       },
       onDelete: async () => {
         const ok = await confirmDialog({ title: t('library.deletePack'), body: pack.title, confirm: t('common.remove'), cancel: t('common.cancel') });
@@ -473,6 +593,7 @@ export default function review(mm) {
           'div',
           { class: 'panel row' },
           h('div', { class: 'stack', style: { gap: '2px' } }, h('b', { class: 'small' }, source.name), h('span', { class: 'mut small' }, t('library.sourceLine', { words: source.words || 0, pages: source.pages || 1 })),
+            source.error ? h('span', { class: 'notice warn small', role: 'status' }, sourceErrorMessage(source.error)) : null,
             source.url && /^https:\/\//i.test(source.url) ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer' }, new URL(source.url).hostname) : null),
           h(
             'div',

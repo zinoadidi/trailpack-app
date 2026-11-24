@@ -129,11 +129,23 @@ export default function library() {
               h('span', { class: 'chip k' }, t('library.sourceCount', { count: (pack.sources || []).length })),
               needsReview ? h('span', { class: 'chip a' }, t('flow.needsReviewCount', { count: needsReview })) : null,
               active ? h('span', { class: 'chip v' }, t('library.isActive')) : null,
+              !draft
+                ? h('button', { class: 'btn sm', type: 'button', onclick: (event) => { event.preventDefault(); event.stopPropagation(); studyPack(pack.id); } }, t('library.study'))
+                : null,
             ),
           );
         }),
       );
     if (version === listVersion) packList.replaceChildren(...cards);
+  }
+
+  // Studying from a card studies that card's Pack, not whichever Pack happens
+  // to be active: choose it, drop any bite that belongs to another Pack, and
+  // open the bite.
+  async function studyPack(packId) {
+    await setActivePack(packId);
+    if (state.studySession && state.studySession.pack && state.studySession.pack.id !== packId) state.studySession = null;
+    navigate('/study?pack=' + encodeURIComponent(packId));
   }
 
   // ---------------------------------------------------------------- mount
@@ -173,7 +185,6 @@ void foldTopics;
 void parseJsonReply;
 void makeIngest;
 void deletePackDocs;
-void setActivePack;
 void savePack;
 void ENGINE_STATES;
 void confirmDialog;

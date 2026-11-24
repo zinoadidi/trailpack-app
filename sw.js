@@ -48,7 +48,7 @@ const SHELL = [
   ...['activity-bridge', 'bite', 'discover', 'exports', 'game-widgets', 'lens-bar',
     'library', 'mixer-logic', 'mixer-matrix', 'mixer', 'practice-deck', 'practice-result',
     'practice-round', 'practice-run', 'practice', 'progress-data', 'progress', 'replacement-offer', 'review-edit',
-    'review', 'study', 'trail-camp-card', 'trail-deadline', 'trail-empty', 'trail-home-logic',
+    'review', 'review-questions', 'study', 'trail-camp-card', 'trail-deadline', 'trail-empty', 'trail-home-logic',
     'trail-home-widgets', 'trail-sprint'].map((name) => `./src/screens/${name}.js`),
   ...['activities', 'additions', 'chunker', 'hygiene', 'ingest', 'library', 'mastery', 'match',
     'mixer-settings', 'mixer', 'pack', 'progress-store', 'prompts', 'replacement', 'session', 'store',
