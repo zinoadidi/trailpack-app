@@ -43,7 +43,7 @@ export async function render(force = false) {
   if (!container) return;
   const hash = location.hash || '#/';
   if (!force && current && current.hash === hash && current.route) {
-    current.route.view.refresh?.();
+    current.view?.refresh?.();
     return;
   }
   const mm = match(hash);

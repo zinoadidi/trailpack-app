@@ -13,6 +13,7 @@ const SHELL = [
   '/styles/activities.css',
   '/styles/trail.css',
   '/src/main.js',
+  '/src/register-sw.js',
   '/src/build-id.js',
   '/src/api/client.js',
   '/src/app/state.js',

@@ -1,0 +1,8 @@
+design
+dev
+test
+scripts
+node_modules
+.git
+*.md
+opencode.json
