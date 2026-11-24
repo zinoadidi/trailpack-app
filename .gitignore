@@ -1,0 +1,16 @@
+design/
+node_modules/
+.env
+*.log
+__pycache__/
+dev/shots/
+dev/shots-m4/
+dev/*.log
+dev/shots-study/
+dev/shots-practice/
+
+# Private notes and local deployment builds
+notes/
+private-notes/
+*.private.md
+.deploy.*/

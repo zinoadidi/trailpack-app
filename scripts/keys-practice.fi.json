@@ -1,0 +1,13 @@
+{
+  "practice.start": "Aloita puraisu",
+  "practice.resume": "Jatka puraisua",
+  "practice.resumeLine": "{step}/{total} vaihetta tehty",
+  "practice.resumeHint": "Jatka siitä, mihin jäit.",
+  "practice.reviewWeak": "Kertaa heikot faktat",
+  "practice.reviewWeakLine": "{count, plural, one {# fakta vaatii nyt työtä} other {# faktaa vaativat nyt työtä}}",
+  "practice.noWeak": "Mikään ei ole nyt epävarmaa. Aloita sen sijaan puraisu.",
+  "practice.startHelp": "Noin {minutes} minuuttia, {steps} vaihetta. Mixeri valitsee tehtävätyypit.",
+  "practice.activePack": "Opiskelet",
+  "practice.changePack": "Kirjasto",
+  "practice.weakOnlyLine": "Lyhyt puraisu siitä, mitä mokaat eniten."
+}

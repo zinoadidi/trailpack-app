@@ -1,0 +1,17 @@
+{
+  "study.wordBank": "Sõnad, mis paika panna",
+  "study.tapWords": "Puuduta sõnu järjekorras",
+  "study.blankHere": "puuduv sõna",
+  "study.typeInstead": "Kirjuta ise",
+  "study.tapInstead": "Puuduta hoopis",
+  "study.swipeByKeyboard": "Nool paremale tähendab õige, nool vasakule vale",
+  "study.choiceKeys": "Vajuta 1 kuni 4, et vastata",
+  "study.flipAgain": "Keera tagasi",
+  "study.feedback": "Vastuse tagasiside",
+  "study.answerWas": "Õige vastus oli {answer}",
+  "study.stepCount": "{step} / {total}",
+  "study.endPoints": "{count, plural, one {# punkt} other {# punkti}}",
+  "study.saving": "Salvestan sinu hammustust...",
+  "study.loadFailed": "Samm ei laadinud. See jäeti ohutult vahele.",
+  "study.noProgress": "Veel pole õpitud. Esimene hammustus algab uutest faktidest."
+}

@@ -1,0 +1,13 @@
+{
+  "practice.start": "Start a bite",
+  "practice.resume": "Resume your bite",
+  "practice.resumeLine": "{step} of {total} steps done",
+  "practice.resumeHint": "Pick up where you left off.",
+  "practice.reviewWeak": "Review weak facts",
+  "practice.reviewWeakLine": "{count, plural, one {# fact needs work right now} other {# facts need work right now}}",
+  "practice.noWeak": "Nothing is shaky right now. Start a bite instead.",
+  "practice.startHelp": "About {minutes} minutes, {steps} steps. The mixer picks the activity types.",
+  "practice.activePack": "Studying",
+  "practice.changePack": "Library",
+  "practice.weakOnlyLine": "A short bite of what you get wrong most."
+}

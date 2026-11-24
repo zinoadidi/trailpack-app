@@ -1,0 +1,64 @@
+// The camp path, the Daily Walk, readiness and deadline as drawn on the home
+// screen. Colour comes from the theme variables only; dots are 44px targets
+// and the path itself is a plain ordered list, so a screen reader reads it in
+// camp order.
+
+.campath { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+
+.camp {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+}
+.camp.current { border-color: color-mix(in srgb, var(--spark) 45%, transparent); background: color-mix(in srgb, var(--spark) 8%, transparent); }
+
+.campdot {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--raised);
+  color: var(--text);
+  font: 700 14px var(--font-mono);
+  cursor: pointer;
+}
+.camp.summited .campdot { background: var(--mint); color: var(--ink); border-color: var(--mint); }
+.camp.open .campdot { background: var(--spark); color: var(--on-spark); border-color: var(--spark); }
+.camp.locked .campdot { opacity: .55; cursor: not-allowed; }
+.campdot:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.campbody { min-width: 0; flex: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .camp { transition: background .2s ease-out, border-color .2s ease-out; }
+}
+
+/* Mixer settings: the activity by state matrix. Cells are 44px buttons,
+   header rows stay readable on a phone, colour comes from the variables. */
+.matrix { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.matrix th, .matrix td { padding: 4px; text-align: center; }
+.matrix thead th { color: var(--muted); font-weight: 600; font-size: 11px; }
+.matrix th[scope=row] { text-align: left; font-weight: 500; color: var(--text); }
+.cell {
+  width: 44px; height: 44px; border-radius: 12px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--raised); color: var(--muted);
+  font: 700 15px var(--font-mono);
+}
+.cell.on { background: color-mix(in srgb, var(--volt) 22%, var(--surface)); border-color: var(--volt); color: var(--volt); }
+.cell:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Readiness ring: a dashed circle filled by --pct (0..100). No animation on
+   the number itself; the dash grows only when motion is allowed. */
+.ringwrap { position: relative; width: 64px; height: 64px; flex: none; }
+.ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(var(--volt) calc(var(--pct, 0) * 1%), var(--raised) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+}
+.ringinner { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
+.heremark { color: var(--spark); font-size: 12px; }

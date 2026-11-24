@@ -1,0 +1,13 @@
+{
+  "practice.start": "Empieza un bocado",
+  "practice.resume": "Retoma tu bocado",
+  "practice.resumeLine": "{step} de {total} pasos hechos",
+  "practice.resumeHint": "Sigue donde lo dejaste.",
+  "practice.reviewWeak": "Repasar los datos flojos",
+  "practice.reviewWeakLine": "{count, plural, one {# dato flojo ahora mismo} other {# datos flojos ahora mismo}}",
+  "practice.noWeak": "Ahora mismo nada está flojo. Empieza un bocado.",
+  "practice.startHelp": "Unos {minutes} minutos, {steps} pasos. Las actividades las elige el mezclador.",
+  "practice.activePack": "Estudiando",
+  "practice.changePack": "Biblioteca",
+  "practice.weakOnlyLine": "Un bocado corto de lo que más fallas."
+}

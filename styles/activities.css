@@ -1,0 +1,99 @@
+// Activity styles: match tiles, the orderable list, choice buttons, the
+// listening transcript and the sweep. Colour comes from the theme variables
+// only, every tap target is 44px or taller, and motion is opt in.
+
+.tile, .opt, .ordertext, .hl-order-btn {
+  min-height: 44px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 13.5px var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tile.sel { border-color: var(--spark); box-shadow: 0 0 0 2px color-mix(in srgb, var(--spark) 30%, transparent); }
+.tile.ok { border-color: var(--mint); background: color-mix(in srgb, var(--mint) 14%, var(--surface)); }
+.tile.no { border-color: var(--error); background: color-mix(in srgb, var(--error) 12%, var(--surface)); }
+.tile:disabled { opacity: .8; cursor: default; }
+
+.orderlist { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.orderitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.ordernum {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--raised);
+  color: var(--muted);
+  font: 700 12px var(--font-mono);
+}
+.ordertext {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px;
+  cursor: pointer;
+}
+.ordertext:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
+.orderbtns { display: flex; gap: 6px; flex: none; }
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 14px var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.opt.ok { border-color: var(--mint); background: color-mix(in srgb, var(--mint) 14%, var(--surface)); }
+.opt.no { border-color: var(--error); background: color-mix(in srgb, var(--error) 12%, var(--surface)); }
+.opt:disabled { cursor: default; }
+
+.transcript {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.lead { font-size: 17px; font-weight: 600; }
+
+@media (max-width: 380px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile, .opt, .orderitem { transition: border-color .15s ease-out, background .15s ease-out; }
+}

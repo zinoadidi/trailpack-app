@@ -1,0 +1,13 @@
+{
+  "practice.start": "Commencer une bouchée",
+  "practice.resume": "Reprendre votre bouchée",
+  "practice.resumeLine": "{step} étapes sur {total} faites",
+  "practice.resumeHint": "Reprenez là où vous vous êtes arrêté.",
+  "practice.reviewWeak": "Revoir les faits fragiles",
+  "practice.reviewWeakLine": "{count, plural, one {# fait fragile en ce moment} other {# faits fragiles en ce moment}}",
+  "practice.noWeak": "Rien n'est fragile en ce moment. Commencez plutôt une bouchée.",
+  "practice.startHelp": "Environ {minutes} minutes, {steps} étapes. Le mélangeur choisit les activités.",
+  "practice.activePack": "À l'étude",
+  "practice.changePack": "Bibliothèque",
+  "practice.weakOnlyLine": "Une courte bouchée de ce que vous ratez le plus."
+}

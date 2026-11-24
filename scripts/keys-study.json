@@ -1,0 +1,17 @@
+{
+  "study.wordBank": "Words to place",
+  "study.tapWords": "Tap the words in order",
+  "study.blankHere": "the missing word",
+  "study.typeInstead": "Type it instead",
+  "study.tapInstead": "Tap instead",
+  "study.swipeByKeyboard": "Arrow right for true, arrow left for false",
+  "study.choiceKeys": "Press 1 to 4 to pick an answer",
+  "study.flipAgain": "Flip back",
+  "study.feedback": "Answer feedback",
+  "study.answerWas": "The answer was {answer}",
+  "study.stepCount": "{step} / {total}",
+  "study.endPoints": "{count, plural, one {# point} other {# points}}",
+  "study.saving": "Saving your bite...",
+  "study.loadFailed": "This step could not load. It was skipped safely.",
+  "study.noProgress": "Nothing studied yet. Your first bite starts with new facts."
+}

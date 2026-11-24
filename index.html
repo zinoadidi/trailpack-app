@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trailpack</title>
+<meta name="description" content="Invite only study app. Drop in your documents, walk out ready.">
+<meta name="theme-color" content="#0C061D">
+<meta name="color-scheme" content="dark light">
+<meta name="build-id" content="dev">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/styles/app.css">
+<link rel="stylesheet" href="/styles/activities.css">
+<link rel="stylesheet" href="/styles/trail.css">
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="nav.skipToContent">Skip to content</a>
+<div id="app" class="app" aria-live="off">
+  <main id="main" class="main" tabindex="-1"></main>
+</div>
+<noscript><p style="padding:24px">Trailpack needs JavaScript to run.</p></noscript>
+<script type="module" src="/src/main.js"></script>
+<script>
+// Register the service worker as early as possible, so the shell is cached on
+// the very first visit. Inline because the security policy forbids remote
+// inline origins; the body only names the file.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

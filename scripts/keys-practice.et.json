@@ -1,0 +1,13 @@
+{
+  "practice.start": "Alusta hammustust",
+  "practice.resume": "Jätka hammustust",
+  "practice.resumeLine": "{step}/{total} sammu tehtud",
+  "practice.resumeHint": "Jätka sealt, kus pooleli jäi.",
+  "practice.reviewWeak": "Korda nõrku fakte",
+  "practice.reviewWeakLine": "{count, plural, one {# fakt vajab praegu tööd} other {# fakti vajavad praegu tööd}}",
+  "practice.noWeak": "Praegu ei ole midagi kõikuvat. Alusta hoopis hammustust.",
+  "practice.startHelp": "Umbes {minutes} minutit, {steps} sammu. Tüübid valib mikser.",
+  "practice.activePack": "Õpid",
+  "practice.changePack": "Raamatukogu",
+  "practice.weakOnlyLine": "Lühike hammustus sellest, milles eksid kõige rohkem."
+}
