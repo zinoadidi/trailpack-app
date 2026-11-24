@@ -39,6 +39,14 @@ export function setPref(key, value) {
   return getPrefs();
 }
 
+/** Use the account theme only when this device has no explicit preference. */
+export function adoptAccountTheme(theme) {
+  if (!THEMES.includes(theme) || THEMES.includes(read().theme)) return null;
+  setPref('theme', theme);
+  applyTheme(theme);
+  return theme;
+}
+
 export function detectLang() {
   const nav = typeof navigator !== 'undefined' ? navigator.language || 'en' : 'en';
   const base = nav.split('-')[0].toLowerCase();
@@ -55,11 +63,11 @@ export function applyTheme(pref, root = typeof document !== 'undefined' ? docume
   return theme;
 }
 
-export function watchTheme(pref, apply = applyTheme) {
+export function watchTheme(pref, apply = applyTheme, currentPref = () => pref) {
   if (typeof matchMedia !== 'function') return () => {};
   const mq = matchMedia('(prefers-color-scheme: light)');
   const handler = () => {
-    if (pref === 'system') apply('system');
+    if (currentPref() === 'system') apply('system');
   };
   mq.addEventListener('change', handler);
   return () => mq.removeEventListener('change', handler);

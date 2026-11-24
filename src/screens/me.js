@@ -136,10 +136,15 @@ export default function me() {
             class: 'btn sm',
             type: 'button',
             onclick: async (e) => {
-              e.currentTarget.disabled = true;
-              await refreshSession();
-              const res = await state.sync.sync();
-              e.currentTarget.disabled = false;
+              const button = e.currentTarget;
+              button.disabled = true;
+              let res;
+              try {
+                await refreshSession();
+                res = await state.sync.sync();
+              } finally {
+                button.disabled = false;
+              }
               updateSyncLines();
               if (res.status === 'synced') toast(t('me.syncStatus.synced'));
             },

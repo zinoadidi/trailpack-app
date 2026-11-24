@@ -23,6 +23,8 @@ TEXT = (
     "A baseline is the approved version of the plan you measure against."
 )
 problems = []
+expected_invalid = {"active": False}
+expected_offline_refresh = {"active": False, "responses": []}
 
 
 def shot(page, name):
@@ -42,11 +44,22 @@ def config_route(route):
 def sign_up(page):
     page.goto(BASE + "/#/access")
     page.wait_for_timeout(700)
+    page.fill("#code", "TRL-0000-0000-0000")
+    expected_invalid["active"] = True
+    page.click("button[type=submit]")
+    page.locator('[role="alert"]').wait_for(state="visible", timeout=5000)
+    expected_invalid["active"] = False
+    check("This code did not work" in page.locator('[role="alert"]').inner_text(), "invalid code feedback is missing")
+    check("/#/access" in page.url, "an invalid invitation left the access screen")
     page.fill("#code", CODE)
     page.click("button[type=submit]")
     page.wait_for_timeout(900)
     page.fill("#name", "Study Walker")
     page.fill("#email", "study-%d@example.com" % int(time.time()))
+    page.fill("#password", "short")
+    page.click("button[type=submit]")
+    page.get_by_text("Use at least 10 characters.", exact=True).wait_for(state="visible", timeout=5000)
+    check("/#/create" in page.url, "short password unexpectedly created an account")
     page.fill("#password", "demo-passphrase-here")
     page.click("button[type=submit]")
     page.wait_for_timeout(1800)
@@ -182,6 +195,35 @@ def next_step(page):
     return None
 
 
+def offline_study(page, ctx):
+    page.evaluate('navigator.serviceWorker.ready')
+    # Playwright's page route supplies the runtime config, but service-worker
+    # install bypasses that route and otherwise caches the example placeholder.
+    page.evaluate('''async (base) => {
+      const cache = await caches.open('trailpack-dev');
+      await cache.put('./config.json', new Response(JSON.stringify({ apiBase: base + '/api/v1' }),
+        { headers: { 'Content-Type': 'application/json' } }));
+    }''', BASE)
+    ctx.set_offline(True)
+    page.reload(wait_until='domcontentloaded')
+    page.get_by_role('heading', name='Practice', exact=True).wait_for(state='visible', timeout=10000)
+    page.get_by_role('button', name='Start a bite').click()
+    page.wait_for_url('**/#/study*')
+    page.wait_for_timeout(1200)
+    kind = answer_step(page)
+    check(kind != 'unknown', 'offline study could not answer an activity')
+    page.get_by_role('button', name='Next', exact=True).wait_for(state='visible', timeout=10000)
+    queued = page.evaluate("import('/src/app/state.js').then(m => m.state.sync.pendingCount())")
+    check(queued > 0, 'offline answer was not queued for sync')
+    expected_offline_refresh['active'] = True
+    ctx.set_offline(False)
+    result = page.evaluate("import('/src/app/state.js').then(async m => { await m.state.sync.sync(); const res = await m.state.sync.sync(); return { ...res, pending: await m.state.sync.pendingCount() }; })")
+    expected_offline_refresh['active'] = False
+    check(result['status'] == 'synced' and result['pending'] == 0, 'offline answer failed to sync after reconnect: ' + str(result))
+    check(all('/api/v1/sync/' in url for url in expected_offline_refresh['responses']), 'unexpected 401 during offline reconnect')
+    print('offline activity result:', kind, result['status'])
+
+
 def themes(page):
     for theme in ["light", "ocean", "matcha", "dark"]:
         page.evaluate("document.documentElement.dataset.theme = '%s'" % theme)
@@ -203,12 +245,14 @@ with sync_playwright() as p:
     page = ctx.new_page()
     page.route("**/config.json*", config_route)
     errors = []
-    page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+    page.on('response', lambda r: expected_offline_refresh['responses'].append(r.url) if expected_offline_refresh['active'] and r.status == 401 else None)
+    page.on("console", lambda m: errors.append(m.text) if m.type == "error" and not ((expected_invalid["active"] and m.text.startswith("Failed to load resource:") and "400" in m.text) or (expected_offline_refresh['active'] and m.text.startswith('Failed to load resource:') and '401' in m.text)) else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
 
     sign_up(page)
     add_document(page)
     study_one_bite(page)
+    offline_study(page, ctx)
     themes(page)
 
     real_errors = [e for e in errors if "favicon" not in e.lower()]

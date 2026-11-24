@@ -40,15 +40,15 @@ export async function renderActivity(container, step, ctx) {
   const fallbackCtx = { ...ctx, fallback: used !== 'flash' };
   if (!mod || typeof mod.default !== 'function') {
     used = 'flash';
-    await flash(container, step, fallbackCtx);
-    return { fallback: true, type: used };
+    const activity = await flash(container, step, fallbackCtx);
+    return { ...activity, fallback: true, type: used };
   }
   try {
-    mod.default(container, step, { ...ctx, fallback: false });
-    return { fallback: false, type: used };
+    const activity = await mod.default(container, step, { ...ctx, fallback: false });
+    return { ...activity, fallback: false, type: used };
   } catch {
     container.replaceChildren();
-    await flash(container, step, fallbackCtx);
-    return { fallback: true, type: 'flash' };
+    const activity = await flash(container, step, fallbackCtx);
+    return { ...activity, fallback: true, type: 'flash' };
   }
 }

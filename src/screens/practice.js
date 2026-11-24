@@ -61,5 +61,5 @@ export default function practice() {
     navigate('/study');
   }
 
-  return { el: root, title: t('practice.title'), mount: paint, refresh: paint };
+  return { el: root, title: t('practice.title'), mount: paint, refresh: paint, destroy() { activeRound?.destroy(); activeRound = null; } };
 }

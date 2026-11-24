@@ -26,7 +26,7 @@ export function campCard(camp, facts = []) {
     failedAt: !passed && last ? Math.round(Number(last.score) || 0) : null,
     canStudy: camp.state === 'open',
     canGate: camp.state === 'open' && gate.length > 0,
-    target: camp.state === 'open' ? '#/bite?camp=' + encodeURIComponent(camp.id) : null,
+    target: camp.state === 'open' ? '#/study?camp=' + encodeURIComponent(camp.id) : null,
   };
 }
 

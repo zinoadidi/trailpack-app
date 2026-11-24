@@ -116,9 +116,10 @@ export function removeSource(pack, sourceId) {
  * Chunk one extracted document. `pages` come from `/ingest/extract`
  * (`[{n, text}]`); a plain `text` is treated as one page.
  */
-export function chunksForSource(source, extraction, limits = DEFAULT_CHUNK) {
+export function chunksForSource(source, extraction, limits = DEFAULT_CHUNK, { preservePages = false } = {}) {
   const pages = Array.isArray(extraction && extraction.pages) && extraction.pages.length ? extraction.pages : [{ n: 1, text: (extraction && extraction.text) || '' }];
   const doc = { pages: pages.map((page) => ({ n: Number(page.n) || 1, text: String(page.text || '') })) };
+  if (preservePages) return doc.pages.flatMap((page) => chunkDocument({ pages: [page] }, { sourceId: source.id, limits }));
   return chunkDocument(doc, { sourceId: source.id, limits });
 }
 

@@ -8,18 +8,32 @@ import { normaliseCode } from './access.js';
 
 export default function create() {
   const code = sessionStorage.getItem('trailpack.redeemCode') || '';
-  const error = h('div', { hidden: true });
+  const error = h('div', { hidden: true, role: 'alert' });
   const name = h('input', { id: 'name', class: 'input', autocomplete: 'name', required: true });
   const email = h('input', { id: 'email', class: 'input', type: 'email', autocomplete: 'email', required: true });
   const password = h('input', { id: 'password', class: 'input', type: 'password', autocomplete: 'new-password', minlength: 10, required: true, 'aria-describedby': 'pw-hint' });
   const submit = h('button', { class: 'btn p block', type: 'submit' }, t('create.submit'));
 
+  function showShortPassword() {
+    error.hidden = false;
+    error.replaceChildren(h('p', { class: 'err' }, t('create.passwordShort')));
+    password.setAttribute('aria-invalid', 'true');
+  }
+  password.addEventListener('invalid', () => {
+    if (password.validity.tooShort) showShortPassword();
+  });
+  password.addEventListener('input', () => {
+    if (password.value.length >= 10 && password.hasAttribute('aria-invalid')) {
+      password.removeAttribute('aria-invalid');
+      error.hidden = true;
+    }
+  });
+
   async function onSubmit(e) {
     e.preventDefault();
     error.hidden = true;
     if (password.value.length < 10) {
-      error.hidden = false;
-      error.replaceChildren(h('p', { class: 'err' }, t('create.passwordShort')));
+      showShortPassword();
       password.focus();
       return;
     }

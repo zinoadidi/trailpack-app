@@ -74,20 +74,20 @@ export default function review(mm) {
    * Read one source: extract, chunk, map. Failures are recorded on the source
    * so one bad file does not stop the rest.
    */
-  async function readSource(source, bytes) {
+  async function readSource(source, bytes, suppliedExtraction = null) {
     say(t('library.reading', { name: source.name }));
     let extraction;
     try {
-      extraction = await ingest().extract(source, bytes);
+      extraction = suppliedExtraction || await ingest().extract(source, bytes);
     } catch (err) {
       pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'reading-failed', error: err.code || 'error' } : s));
       await persist({ draftToo: true });
-      return;
+      return false;
     }
     const words = wordsOf(extraction);
     pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapping', words, pages: (extraction.pages || []).length || 1 } : s));
     await persist({ draftToo: true });
-    const chunks = chunksForSource(source, extraction);
+    const chunks = chunksForSource(source, extraction, undefined, { preservePages: Boolean(suppliedExtraction) });
     say(t('library.mapping', { name: source.name, count: chunks.length }));
     const state0 = { topics, facts, warnings: [] };
     let next = state0;
@@ -108,13 +108,14 @@ export default function review(mm) {
     } catch (err) {
       pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapping-failed', error: err.code || 'error' } : s));
       await persist({ draftToo: true });
-      return;
+      return false;
     }
     const folded = foldTopics(next.topics, next.facts);
     topics = folded.topics;
     facts = folded.facts;
     pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapped' } : s));
     await persist({ draftToo: true });
+    return true;
   }
 
   async function addFiles(fileList) {
@@ -160,6 +161,50 @@ export default function review(mm) {
       say('');
     }
     render();
+  }
+
+  async function importSource(item) {
+    if (running) return;
+    running = true;
+    render();
+    try {
+      const reply = await state.api.fetchSource(item.url);
+      if (typeof reply.text !== 'string' || !reply.text.trim()) throw new Error('empty_source');
+      const name = item.title.slice(0, 150);
+      const id = sourceId(name);
+      const source = { ...newSource({ id, name, type: 'text/plain', size: new TextEncoder().encode(reply.text).length, fileId: null }), url: reply.url };
+      pack.sources = [...(pack.sources || []), source];
+      await persist({ draftToo: true });
+      if (!(await readSource(source, null, reply))) {
+        pack.sources = (pack.sources || []).filter((entry) => entry.id !== id);
+        throw new Error('source_mapping_failed');
+      }
+      pack.pendingSources = (pack.pendingSources || []).filter((entry) => entry.url !== item.url);
+      await persist({ draftToo: true });
+    } catch {
+      pack.pendingSources = (pack.pendingSources || []).map((entry) => entry.url === item.url ? { ...entry, failed: true } : entry);
+      await saveDraft({ pack, topics, facts, edits }).catch(() => null);
+    } finally {
+      running = false;
+      say('');
+      render();
+    }
+  }
+
+  function pendingSources() {
+    const entries = pack.pendingSources || [];
+    if (!entries.length) return null;
+    return h('section', { class: 'panel stack' }, h('h2', { class: 'h' }, t('discover.selected')),
+      ...entries.map((entry) => h('div', { class: 'stack' },
+        h('b', {}, entry.title),
+        entry.failed ? h('p', { class: 'notice warn', role: 'status' }, t('discover.importFailed')) : null,
+        h('div', { class: 'row wrap', style: { gap: '8px', justifyContent: 'flex-start' } },
+          h('button', { class: 'btn p sm', type: 'button', disabled: running, onclick: () => importSource(entry) }, t('discover.importSource', { title: entry.title })),
+          h('button', { class: 'btn sm', type: 'button', disabled: running, onclick: async () => {
+            pack.pendingSources = pack.pendingSources.filter((item) => item.url !== entry.url);
+            await saveDraft({ pack, topics, facts, edits });
+            render();
+          } }, t('discover.removeSource', { title: entry.title }))))));
   }
 
   async function removeOne(source) {
@@ -243,6 +288,7 @@ export default function review(mm) {
             'div',
             { class: 'stack' },
             h('p', { class: 'mut small' }, t('library.reviewHelp')),
+            pendingSources(),
             h(
               'div',
               {
@@ -316,7 +362,8 @@ export default function review(mm) {
         h(
           'div',
           { class: 'panel row' },
-          h('div', { class: 'stack', style: { gap: '2px' } }, h('b', { class: 'small' }, source.name), h('span', { class: 'mut small' }, t('library.sourceLine', { words: source.words || 0, pages: source.pages || 1 }))),
+          h('div', { class: 'stack', style: { gap: '2px' } }, h('b', { class: 'small' }, source.name), h('span', { class: 'mut small' }, t('library.sourceLine', { words: source.words || 0, pages: source.pages || 1 })),
+            source.url && /^https:\/\//i.test(source.url) ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer' }, new URL(source.url).hostname) : null),
           h(
             'div',
             { class: 'row', style: { gap: '6px' } },

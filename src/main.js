@@ -1,12 +1,12 @@
 // Entry point: config, store, i18n, api, session restore, router, service worker.
 
 import { loadConfig, setLanguage, state, initialLang, subscribe, emit } from './app/state.js';
-import { getPrefs, applyTheme, watchTheme } from './app/prefs.js';
+import { getPrefs, applyTheme, watchTheme, adoptAccountTheme } from './app/prefs.js';
 import { IdbStore, MemoryStore } from './store/idb.js';
 import { createFileStore, requestPersist, estimateStorage } from './store/files.js';
 import { createSyncEngine } from './sync/engine.js';
 import { createClient } from './api/client.js';
-import { loadRefreshToken, refreshSession, signOut } from './app/session.js';
+import { loadRefreshToken, refreshSession, restoreOfflineSession, revalidateCachedSession, signOut } from './app/session.js';
 import { register, guard, startRouter, navigate } from './app/router.js';
 import { h, icon, mark, toast } from './app/ui.js';
 
@@ -25,7 +25,9 @@ const screens = {
   '/mixer': () => import('./screens/mixer.js'),
   '/exports': () => import('./screens/exports.js'),
   '/library': () => import('./screens/library.js'),
+  '/learn': () => import('./screens/discover.js'),
   '/library/review': () => import('./screens/review.js'),
+  '/404': () => import('./screens/notfound.js'),
 };
 
 let bootError = null;
@@ -33,8 +35,8 @@ let bootError = null;
 async function boot() {
   const prefs = getPrefs();
   applyTheme(prefs.theme);
-  watchTheme(prefs.theme);
   state.prefTheme = prefs.theme;
+  watchTheme(prefs.theme, applyTheme, () => state.prefTheme);
   state.syncEnabled = prefs.sync;
   await setLanguage(prefs.lang);
 
@@ -78,26 +80,29 @@ async function boot() {
 
   registerShell();
   subscribe(renderChrome);
+  document.addEventListener('tp:navigated', renderChrome);
 
+  // Route guards must not interpret a session still being restored as signed out.
+  const restored = await restoreSession();
   const el = document.getElementById('main');
   startRouter(el);
   renderChrome();
   window.addEventListener('online', () => {
     state.online = true;
     emit('network');
-    syncIfEnabled();
+    reconnectAndSync();
   });
   window.addEventListener('offline', () => {
     state.online = false;
     emit('network');
   });
-  window.addEventListener('focus', syncIfEnabled);
-  setInterval(syncIfEnabled, 60_000);
+  window.addEventListener('focus', reconnectAndSync);
+  setInterval(reconnectAndSync, 60_000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') syncIfEnabled();
+    if (document.visibilityState === 'visible') reconnectAndSync();
   });
 
-  await restoreSession();
+  if (restored) await restoreSyncedData();
   await refreshStorage();
   emit('ready');
 }
@@ -105,7 +110,11 @@ async function boot() {
 async function restoreSession() {
   const token = await loadRefreshToken();
   if (!token) return;
-  const ok = await refreshSession();
+  if (!state.online) {
+    await restoreOfflineSession();
+    return;
+  }
+  const ok = await refreshSession({ restoreOnNetworkError: true });
   if (!ok) return;
   try {
     const { user, usage } = await state.api.me();
@@ -115,6 +124,12 @@ async function restoreSession() {
     return;
   }
   emit('session');
+  const theme = adoptAccountTheme(state.user?.theme);
+  if (theme) state.prefTheme = theme;
+  return true;
+}
+
+async function restoreSyncedData() {
   if (state.sync) {
     // Empty local store (new device or wiped): pull everything back.
     const docs = await state.store.getAllKeys('docs');
@@ -130,6 +145,13 @@ function syncIfEnabled() {
   if (state.online && getPrefs().sync !== false && state.user) state.sync?.sync();
 }
 
+async function reconnectAndSync() {
+  if (!state.online) return;
+  const status = await revalidateCachedSession();
+  if (status === 'rejected') navigate('/login', { replace: true });
+  else if (status === 'valid') syncIfEnabled();
+}
+
 async function refreshStorage() {  const reading = await estimateStorage();
   const persisted = await requestPersist();
   state.storage = { ...reading, persisted, low: false };
@@ -139,7 +161,7 @@ async function refreshStorage() {  const reading = await estimateStorage();
 function registerShell() {
   for (const [path, loader] of Object.entries(screens)) {
     register(path, async (mm) => {
-      if (!state.user && !['/access', '/create', '/login', '/language'].includes(mm.path)) {
+      if (!state.user && !['/access', '/create', '/login', '/language', '/404'].includes(mm.path)) {
         navigate('/access', { replace: true });
         return null;
       }
@@ -148,6 +170,7 @@ function registerShell() {
         return null;
       }
       const mod = await loader();
+      if (!mm.isCurrent()) return null;
       return mod.default(mm);
     });
   }
@@ -174,6 +197,7 @@ const TABS = [
 ];
 
 let chrome = null;
+let topbar = null;
 
 function renderChrome() {
   if (!state.t) return;
@@ -181,11 +205,19 @@ function renderChrome() {
   if (!loggedIn) {
     chrome?.remove();
     chrome = null;
+    topbar?.remove();
+    topbar = null;
     return;
   }
   if (chrome) {
     chrome.remove();
   }
+  topbar?.remove();
+  topbar = h('header', { class: 'workspace-topbar' },
+    h('span', { class: 'workspace-brand' }, mark(28, 'mobile'), state.t('app.name')),
+    h('a', { class: 'workspace-account', href: '#/me' }, state.t('nav.me')),
+  );
+  document.getElementById('main').before(topbar);
   const path = (location.hash || '#/').replace(/^#/, '') || '/';
   chrome = h('nav', { class: 'tabbar', 'aria-label': state.t('nav.mainMenu') });
   for (const tab of TABS) {

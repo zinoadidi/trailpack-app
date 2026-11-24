@@ -70,6 +70,17 @@ async function removeDoc(store, sync, collection, id) {
 /** Every Pack, newest first. */
 export async function listPacks(store = state.store) {
   const packs = await allDocs(store, PACK);
+  if (store) {
+    const known = new Set(packs.map((pack) => pack.id));
+    const rows = await store.getAll('meta');
+    for (const row of rows) {
+      const pack = row.value?.pack;
+      if (pack?.id && pack.status === 'draft' && row.key === 'draft-' + pack.id && !known.has(pack.id)) {
+        packs.push(pack);
+        known.add(pack.id);
+      }
+    }
+  }
   return packs.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
 

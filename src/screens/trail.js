@@ -133,6 +133,7 @@ export default function trail() {
       h('div', { class: 'panel stack' },
         h('p', { class: 'mut' }, message),
         h('div', { class: 'row wrap', style: { gap: '8px' } },
+          h('a', { class: 'btn p', href: '#/learn' }, t('discover.learn')),
           h('a', { class: 'btn p', href: ctaHref(kind) }, t('trail.emptyCta')),
           h('a', { class: 'btn', href: '#/mixer' }, t('mixer.title')))),
     );
@@ -160,7 +161,7 @@ export default function trail() {
       h('div', { class: 'row small mut' }, h('span', {}, home.walk.stepsLine || ''), h('span', {}, home.walk.dueLine || '')),
       h('p', { class: 'small' }, home.walk.met ? t('trail.dailyWalkMet') : t('trailhome.walkNext', { remaining: home.walk.remaining })),
       h('div', { class: 'row wrap', style: { gap: '8px' } },
-        h('a', { class: 'btn p', href: '#/bite' }, t('study.startBite')),
+        h('a', { class: 'btn p', href: '#/study' }, t('study.startBite')),
         home.current ? h('button', { type: 'button', class: 'btn', onclick: () => openCamp(home.current.id) }, t('trail.studyCamp')) : null,
         h('a', { class: 'btn', href: '#/practice' }, t('act2.practiceTitle')))));
     cards.push(h('div', { class: 'panel stack' },
@@ -183,7 +184,7 @@ export default function trail() {
   }
 
   function openCamp(campId) {
-    const url = '#/bite?camp=' + encodeURIComponent(campId);
+    const url = '#/study?camp=' + encodeURIComponent(campId);
     location.hash = url;
   }
 

@@ -58,7 +58,10 @@ export default function render(container, step, ctx) {
     else reset();
   };
   card.addEventListener('pointerup', release);
-  card.addEventListener('pointercancel', release);
+  card.addEventListener('pointercancel', () => {
+    startX = null;
+    if (!answered) reset();
+  });
 
   container.append(
     h(

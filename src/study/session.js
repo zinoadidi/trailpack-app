@@ -66,13 +66,37 @@ export function normaliseAnswer(raw = {}, type = 'quiz') {
   };
 }
 
+/** Restrict an explicit camp request to reachable camps and their own facts. */
+export function studySelection({ facts = [], trail = null, requested = null, progress = null } = {}) {
+  const camps = Array.isArray(trail?.camps) ? trail.camps : [];
+  if (!requested) return { camp: camps.find((camp) => camp.state === 'open') || null, facts, ...(progress ? { progress } : {}) };
+  const camp = camps.find((item) => item.id === requested && (item.state === 'open' || item.state === 'summited'));
+  if (!camp) return null;
+  const ids = new Set(camp.factIds || []);
+  return { camp, facts: facts.filter((fact) => ids.has(fact.id)), ...(progress ? { progress: Object.fromEntries(Object.entries(progress).filter(([id]) => ids.has(id))) } : {}) };
+}
+
+/** Only show source metadata that belongs to this fact; never manufacture a citation. */
+export function studySourceContext(fact, pack) {
+  const sources = Array.isArray(pack?.sources) ? pack.sources : [];
+  const source = fact?.sourceId && sources.find((item) => item && item.id === fact.sourceId);
+  if (!source || !source.name) return null;
+  let url = null;
+  try {
+    const parsed = new URL(source.url);
+    if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) url = parsed.href;
+  } catch { /* a local source has no web link */ }
+  const page = Number(fact.page);
+  return { name: String(source.name), url, page: Number.isInteger(page) && page > 0 ? page : null };
+}
+
 /**
  * Which facts a bite draws from, given the Progress map, the Trail and the
  * pack facts. Intake first (about 30% new), then due reviews, then the open
  * camp's facts as a fallback so a fresh pack always has something to bite.
  * Returns the fact id order the Mixer walks.
  */
-export function studyQueue({ facts = [], progress = {}, trail = null, steps = 8, now = Date.now(), rate = 0.3 } = {}) {
+export function studyQueue({ facts = [], progress = {}, trail = null, campId = null, steps = 8, now = Date.now(), rate = 0.3 } = {}) {
   const known = new Set(facts.map((fact) => fact.id));
   const due = dueFacts(progress, { now });
   const unseen = facts.filter((fact) => !progress[fact.id] || progress[fact.id].state === 'new').map((fact) => fact.id);
@@ -90,7 +114,8 @@ export function studyQueue({ facts = [], progress = {}, trail = null, steps = 8,
   // The open camp's unseen facts fill the rest when the progress map is empty
   // (a brand new pack, or a device that has not synced yet).
   if (queue.length < steps) {
-    const open = trail && Array.isArray(trail.camps) ? trail.camps.find((camp) => camp.state === 'open') : null;
+    const camps = Array.isArray(trail?.camps) ? trail.camps : [];
+    const open = camps.find((camp) => camp.id === campId) || camps.find((camp) => camp.state === 'open');
     const campIds = open ? open.factIds.filter((id) => known.has(id)) : facts.map((fact) => fact.id);
     for (const id of campIds) {
       if (queue.length >= steps) break;
@@ -154,7 +179,7 @@ export function startSession(input = {}) {
     const doc = progress && progress[factId];
     return doc && doc.state ? doc.state : 'new';
   };
-  const { queue, intake, paused, due } = studyQueue({ facts, progress, trail, steps: want, now });
+  const { queue, intake, paused, due } = studyQueue({ facts, progress, trail, campId, steps: want, now });
   const ordered = queue.map((id) => facts.find((fact) => fact.id === id)).filter(Boolean);
   const bite = buildBite({ facts: ordered, stateOf, order: queue, settings: settingsForCamp, lens, steps: want, seed, history });
 

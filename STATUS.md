@@ -1,8 +1,15 @@
 # Status
 
-Last updated: public handoff and Practice implementation.
+Last updated: learning workspace redesign (local verification).
 
 Honest notes: what runs, what was tested and how, and what is missing.
+
+## Learning workspace redesign
+
+- Responsive workspace, four existing theme IDs and five locales; searchable library, topic discovery, camp-scoped study and optional source context. Invitations and document upload remain available. Topic search is disabled by default and requires separate server-side configuration and approval.
+- Session restoration waits for authentication before routing; a fresh device restores synced data only if its local docs, outbox and cursor are empty. An explicit device theme takes precedence over the account theme. Local study can use cached account information when offline or the API is unreachable. Reconnection revalidates cached sessions even with sync disabled; revocation cannot be detected while disconnected.
+- Frontend `npm test`: 451 passed, including secret scan. API `npm test`: 115 passed, including discovery, source safety and extraction fixtures. Chromium workspace smoke covers three widths, all themes, keyboard focus, reduced motion, chip contrast, session reload, offline home and revoked-session reconnection. Two-device sync/theme smoke passed. Offline study smoke answered a question, reconnected and synced the outbox. Independent review also informed fixes for camp selection and source import.
+- Not yet verified end-to-end: live search/provider and live external source fetching, real-world PDF/DOCX/PPTX/EML browser uploads, all activity types and admin/export actions, screen readers and non-Chromium browsers. Non-English translations still need native review. These results describe local verification.
 
 ## Public handoff and Practice
 

@@ -19,7 +19,7 @@ export default function render(container, step, ctx) {
   const flipBtn = h('button', { class: 'btn p block', type: 'button', onclick: () => flip() }, t('study.showAnswer'));
 
   function rate(selfRate) {
-    if (answered) return;
+    if (!flipped || answered) return;
     answered = true;
     const correct = selfRate !== 'again';
     announce(t(correct ? 'study.correct' : 'study.wrong'));

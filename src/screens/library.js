@@ -27,6 +27,8 @@ export default function library() {
   const root = h('div', { class: 'stack' });
   const packList = h('div', { class: 'stack' });
   const status = h('p', { class: 'mut small', 'aria-live': 'polite' });
+  const search = h('input', { class: 'input', type: 'search', 'aria-label': t('library.search'), placeholder: t('library.search'), oninput: () => renderList() });
+  let listVersion = 0;
   let busy = false;
 
   function setStatus(text) {
@@ -87,14 +89,21 @@ export default function library() {
   // ---------------------------------------------------------------- list
 
   async function renderList() {
+    const version = ++listVersion;
+    const query = search.value.trim().toLocaleLowerCase();
     const packs = await listPacks();
+    if (version !== listVersion) return;
     if (!packs.length) {
       packList.replaceChildren(h('div', { class: 'panel' }, h('p', { class: 'mut' }, t('library.empty')), h('button', { class: 'btn p block', type: 'button', onclick: startPack }, t('library.newPack'))));
       return;
     }
-    packList.replaceChildren(
-      ...(await Promise.all(
-        packs.map(async (pack) => {
+    const matches = packs.filter((pack) => `${pack.title || ''} ${pack.goal || ''}`.toLocaleLowerCase().includes(query));
+    if (!matches.length) {
+      packList.replaceChildren(h('p', { class: 'mut', role: 'status' }, t('library.noMatches')));
+      return;
+    }
+    const cards = await Promise.all(
+        matches.map(async (pack) => {
           const active = (await activePackId()) === pack.id;
           const draft = pack.status === 'draft';
           const draftData = draft ? await loadDraft(state.store, pack.id) : null;
@@ -120,8 +129,8 @@ export default function library() {
             ),
           );
         }),
-      )),
-    );
+      );
+    if (version === listVersion) packList.replaceChildren(...cards);
   }
 
   // ---------------------------------------------------------------- mount
@@ -131,6 +140,7 @@ export default function library() {
     h('p', { class: 'mut' }, t('library.intro')),
     status,
     h('h2', { class: 'h small' }, t('library.packList')),
+    search,
     packList,
     h('h2', { class: 'h small' }, t('library.howTo')),
     h('div', { class: 'panel stack' }, h('p', { class: 'mut small' }, t('library.dropHelp', { types: extensions }))),

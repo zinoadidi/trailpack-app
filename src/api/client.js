@@ -147,6 +147,8 @@ export function createClient({ baseUrl, fetchImpl = globalThis.fetch, onUnauthor
     syncExport: () => request('/sync/export'),
 
     // ingest and LLM
+    searchTopics: (topic, limit = 5) => request('/ingest/search', { method: 'POST', body: { topic, limit } }),
+    fetchSource: (url) => request('/ingest/source', { method: 'POST', body: { url } }),
     extract: (bytes, { name, type }) =>
       request('/ingest/extract', {
         method: 'POST',

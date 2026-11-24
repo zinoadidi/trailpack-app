@@ -17,7 +17,7 @@ import { h, announce, toast, confirmDialog } from '../app/ui.js';
 import { navigate } from '../app/router.js';
 import { resolveActivePack } from '../study/store.js';
 import { loadProgress, saveProgressMany, loadPlan, loadMixerSettings, loadStudyMeta, saveStudyMeta, saveAttempts } from '../study/progress-store.js';
-import { startSession, currentStep, answerStep, stepVariant, sessionAttempts, finishSession, stepPlayable } from '../study/session.js';
+import { startSession, studySelection, studySourceContext, currentStep, answerStep, stepVariant, sessionAttempts, finishSession, stepPlayable } from '../study/session.js';
 import { renderActivity } from './activities/index.js';
 import { recordStep, recordBite, recordFinish, finishPoints, sound, soundFailed, soundFlip, answerStreak, levelOptions, newLevels, readProfileSafe } from '../game/wire-run.js';
 import { levelState, readProfile } from '../game/screen-helpers.js';
@@ -39,20 +39,32 @@ export default function study() {
   root.append(head, body, foot);
   let busy = false;
   let answered = false;
+  let closed = false;
+  let activityEpoch = 0;
+  let activity = null;
+  function cleanupActivity() { activityEpoch++; activity?.destroy?.(); activity = null; }
 
   async function boot() {
     const bundle = await resolveActivePack().catch(() => null);
+    if (closed) return;
     if (!bundle || !bundle.facts || !bundle.facts.length) {
       body.append(emptyState());
       return;
     }
     const { pack, facts } = bundle;
     const [progress, trail, settings, meta] = await Promise.all([loadProgress(pack.id), loadPlan(pack.id), loadMixerSettings(), loadStudyMeta()]);
-    const asked = new URLSearchParams(location.hash.split('?')[1] || '').get('steps');
-    const camp = trail && Array.isArray(trail.camps) ? trail.camps.find((item) => item.state === 'open') : null;
+    if (closed) return;
+    const params = new URLSearchParams(location.hash.split('?')[1] || '');
+    const asked = params.get('steps');
+    const selection = studySelection({ facts, trail, progress, requested: params.get('camp') });
+    if (!selection || !selection.facts.length) {
+      body.append(emptyState());
+      return;
+    }
+    const { camp } = selection;
     const session = startSession({
-      facts,
-      progress,
+      facts: selection.facts,
+      progress: selection.progress,
       trail,
       settings,
       campId: camp ? camp.id : null,
@@ -65,7 +77,9 @@ export default function study() {
       body.append(emptyState());
       return;
     }
-    state.studySession = { session, pack, facts, trail, trailProfile: await readProfileSafe() };
+    const trailProfile = await readProfileSafe();
+    if (closed) return;
+    state.studySession = { session, pack, facts, trail, trailProfile, requestedCamp: params.get('camp') || null };
     paint();
   }
 
@@ -106,6 +120,9 @@ export default function study() {
   }
 
   function paint() {
+    if (closed) return;
+    cleanupActivity();
+    const token = activityEpoch;
     const held = state.studySession;
     if (!held) return;
     const { session } = held;
@@ -134,7 +151,7 @@ export default function study() {
       index: session.index,
       total: session.steps.length,
       onAnswer(answer) {
-        if (answered) return;
+        if (closed || token !== activityEpoch || answered) return;
         answered = true;
         advance(answer, false, drawn);
       },
@@ -143,8 +160,19 @@ export default function study() {
       },
     };
     const holder = h('div', { class: 'stack' });
-    body.append(holder);
+    const source = studySourceContext(drawn.fact, held.pack);
+    const layout = h('div', { class: source ? 'study-workspace' : 'stack' }, holder);
+    if (source) {
+      layout.append(h('details', { class: 'panel study-source' },
+        h('summary', {}, t('study.sourceContext')),
+        h('p', {}, source.name),
+        source.page ? h('p', { class: 'small mut' }, t('study.sourcePage', { page: source.page })) : null,
+        source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer' }, t('study.viewSource')) : null));
+    }
+    body.append(layout);
     renderActivity(holder, step, ctx).then((result) => {
+      if (closed || token !== activityEpoch) { result?.destroy?.(); return; }
+      activity = result;
       if (result && result.fallback) holder.append(h('p', { class: 'mut small' }, t('study.fallbackFlash')));
     });
     foot.append(
@@ -158,7 +186,8 @@ export default function study() {
   }
 
   async function advance(answer, skipped, drawn) {
-    if (busy || !state.studySession) return;
+    if (closed || busy || !state.studySession) return;
+    cleanupActivity();
     busy = true;
     const held = state.studySession;
     const outcome = await recordAnswer(held.session, answer, { skipped, facts: held.facts });
@@ -256,8 +285,16 @@ export default function study() {
     el: root,
     title: t('study.title'),
     async mount() {
+      const requestedCamp = new URLSearchParams(location.hash.split('?')[1] || '').get('camp');
+      if (requestedCamp && state.studySession && state.studySession.requestedCamp !== requestedCamp) {
+        const ok = await confirmDialog({ title: t('study.leaveTitle'), body: t('study.leaveBody'), confirm: t('study.leave'), cancel: t('study.stay') });
+        if (closed) return;
+        if (!ok) { navigate('/', { replace: true }); return; }
+        state.studySession = null;
+      }
       if (!state.studySession) await boot();
       else paint();
     },
+    destroy() { closed = true; cleanupActivity(); },
   };
 }

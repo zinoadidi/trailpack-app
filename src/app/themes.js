@@ -6,10 +6,10 @@ export const THEME_IDS = ['dark', 'light', 'ocean', 'matcha', 'system'];
 
 /** The concrete themes and the palette each one uses for its preview tile. */
 export const THEMES = [
-  { id: 'dark', name: 'Grape Night', scheme: 'dark', labelKey: 'me.themeDark', page: '#0C061D', surface: '#221446', raised: '#2F1D5E', spark: '#FF5C8A', volt: '#C6F432', text: '#FFF7F0' },
-  { id: 'light', name: 'Sunrise', scheme: 'light', labelKey: 'me.themeLight', page: '#EFDFC8', surface: '#FFFFFF', raised: '#EEE0FF', spark: '#E8286B', volt: '#5A8C00', text: '#1D0F44' },
-  { id: 'ocean', name: 'Deep Ocean', scheme: 'dark', labelKey: 'me.themeOcean', page: '#031020', surface: '#0C2A47', raised: '#123A5F', spark: '#19D3C5', volt: '#8BE04E', text: '#EAF7FF' },
-  { id: 'matcha', name: 'Matcha Pop', scheme: 'light', labelKey: 'me.themeMatcha', page: '#DDEBC4', surface: '#FFFFFF', raised: '#E2F0C8', spark: '#D44A0B', volt: '#5E8300', text: '#14301A' },
+  { id: 'dark', name: 'Grape Night Studio', scheme: 'dark', labelKey: 'me.themeDark', page: '#0B0716', surface: '#151024', raised: '#1E1833', spark: '#FF5C8A', volt: '#C6F432', text: '#F3EEFF' },
+  { id: 'light', name: 'Sunrise Arcade', scheme: 'light', labelKey: 'me.themeLight', page: '#FFF6E9', surface: '#FFFFFF', raised: '#FFE8CC', spark: '#C42E0C', volt: '#2F7A20', text: '#3A2200' },
+  { id: 'ocean', name: 'Polar Deep', scheme: 'dark', labelKey: 'me.themeOcean', page: '#2E3440', surface: '#3B4252', raised: '#434C5E', spark: '#88C0D0', volt: '#A3BE8C', text: '#ECEFF4' },
+  { id: 'matcha', name: 'Matcha Forest', scheme: 'light', labelKey: 'me.themeMatcha', page: '#F5F7EE', surface: '#FFFFFF', raised: '#EAF0DE', spark: '#794824', volt: '#4F7000', text: '#203B2B' },
 ];
 
 export const THEME_PREVIEW = THEMES;
@@ -34,4 +34,4 @@ export function themeById(id) {
   return THEMES.find((theme) => theme.id === id) || null;
 }
 
-export const THEME_COLOR = { dark: '#0C061D', ocean: '#031020', light: '#EFDFC8', matcha: '#DDEBC4' };
+export const THEME_COLOR = { dark: '#0B0716', ocean: '#2E3440', light: '#FFF6E9', matcha: '#F5F7EE' };

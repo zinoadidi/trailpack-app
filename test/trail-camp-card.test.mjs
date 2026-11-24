@@ -31,7 +31,7 @@ test('an open camp offers the gate only when it has gate facts', () => {
   assert.equal(card.canStudy, true);
   assert.equal(card.gateFacts, 1, 'the uncertain fact waits outside the gate');
   assert.equal(card.canGate, true);
-  assert.equal(card.target, '#/bite?camp=camp_2');
+  assert.equal(card.target, '#/study?camp=camp_2');
 });
 
 test('a locked camp offers nothing', () => {

@@ -12,6 +12,8 @@ export function renderPracticeRound(root, { facts, progress, type, onExit }) {
   let closed = false;
   let locked = false;
   let epoch = 0;
+  let activity = null;
+  function cleanupActivity() { activity?.destroy?.(); activity = null; }
   if (!session) {
     root.replaceChildren(h('section', { class: 'panel stack' }, h('p', {}, t('practice.typeUnavailable')), h('button', { class: 'btn', onclick: onExit }, t('practice.title'))));
     return { destroy() { closed = true; root.replaceChildren(); } };
@@ -26,6 +28,7 @@ export function renderPracticeRound(root, { facts, progress, type, onExit }) {
 
   function drawStep() {
     if (closed) return;
+    cleanupActivity();
     const step = currentStep(session);
     if (!step) return complete();
     const token = ++epoch;
@@ -38,13 +41,16 @@ export function renderPracticeRound(root, { facts, progress, type, onExit }) {
       t, api: state.api, fact: resolved.fact, variant: resolved.variant, step, index: session.index, total: session.steps.length,
       onAnswer: (payload) => record(payload, token, resolved.variant),
     }).then((result) => {
-      if (!closed && token === epoch && result?.fallback) host.append(h('p', { class: 'mut small' }, t('study.fallbackFlash')));
+      if (closed || token !== epoch || locked) { result?.destroy?.(); return; }
+      activity = result;
+      if (result?.fallback) host.append(h('p', { class: 'mut small' }, t('study.fallbackFlash')));
     });
   }
 
   async function record(payload, token, variant) {
     if (closed || token !== epoch || locked) return;
     locked = true;
+    cleanupActivity();
     const out = answerPracticeStep(session, payload, facts);
     session = out.session;
     if (out.progressDoc) await saveProgressMany([out.progressDoc]).catch(() => null);
@@ -59,6 +65,7 @@ export function renderPracticeRound(root, { facts, progress, type, onExit }) {
   async function complete() {
     if (closed) return;
     closed = true;
+    cleanupActivity();
     await saveAttempts(sessionAttempts(session)).catch(() => null);
     const summary = resultSummary(session.answers);
     root.replaceChildren(h('section', { class: 'panel stack', 'data-practice-result': 'true' },
@@ -70,5 +77,5 @@ export function renderPracticeRound(root, { facts, progress, type, onExit }) {
   }
 
   drawStep();
-  return { destroy() { closed = true; epoch += 1; root.replaceChildren(); } };
+  return { destroy() { closed = true; epoch += 1; cleanupActivity(); root.replaceChildren(); } };
 }

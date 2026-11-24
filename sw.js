@@ -17,10 +17,13 @@ const SHELL = [
   './src/build-id.js',
   './src/api/client.js',
   './src/app/state.js',
+  './src/app/prefs.js',
+  './src/app/themes.js',
   './src/app/router.js',
   './src/app/ui.js',
   './src/app/session.js',
   './src/i18n/format.js',
+  ...['en', 'et', 'es', 'fr', 'fi'].map((lang) => `./src/i18n/${lang}.json`),
   './src/store/idb.js',
   './src/store/files.js',
   './src/sync/engine.js',
@@ -32,6 +35,24 @@ const SHELL = [
   './src/screens/admin.js',
   './src/screens/language.js',
   './src/screens/notfound.js',
+  // Include lazy-loaded routes and activity modules, not just the boot shell:
+  // an existing Pack must be usable offline even before each screen was visited.
+  ...['bundle', 'zip'].map((name) => `./src/export/${name}.js`),
+  ...['achievements', 'bite', 'certificate', 'export-run', 'export', 'lens', 'levels',
+    'points', 'profile', 'screen-helpers', 'sfx', 'shortcuts', 'store', 'streaks',
+    'wire-run', 'wire'].map((name) => `./src/game/${name}.js`),
+  ...['_helpers', 'answer-box', 'blitz', 'cloze', 'flash', 'index', 'listen-plan',
+    'listen', 'match', 'order', 'quiz', 'registry', 'shared', 'spot-mistake',
+    'sweep', 'swipe', 'teach-back', 'true-false', 'voice']
+    .map((name) => `./src/screens/activities/${name}.js`),
+  ...['activity-bridge', 'bite', 'discover', 'exports', 'game-widgets', 'lens-bar',
+    'library', 'mixer-logic', 'mixer-matrix', 'mixer', 'practice-deck', 'practice-result',
+    'practice-round', 'practice-run', 'practice', 'progress-data', 'progress', 'review-edit',
+    'review', 'study', 'trail-camp-card', 'trail-deadline', 'trail-empty', 'trail-home-logic',
+    'trail-home-widgets', 'trail-sprint'].map((name) => `./src/screens/${name}.js`),
+  ...['activities', 'chunker', 'hygiene', 'ingest', 'library', 'mastery', 'match',
+    'mixer-settings', 'mixer', 'pack', 'progress-store', 'prompts', 'session', 'store',
+    'trail-normalise', 'trail'].map((name) => `./src/study/${name}.js`),
   './manifest.webmanifest',
   './icons/mark.svg',
   './config.json',
@@ -70,6 +91,16 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache API calls or cross origin requests.
   if (isApi(url) || url.origin !== self.location.origin) return;
+
+  // Config is fetched with a unique query to avoid stale deploys. Use the
+  // stable cache key only as an offline fallback, never ahead of the network.
+  if (url.pathname === new URL('./config.json', self.registration.scope).pathname) {
+    event.respondWith(fetch(req).then(async (res) => {
+      if (res.ok) await (await caches.open(CACHE)).put('./config.json', res.clone());
+      return res;
+    }).catch(() => caches.match('./config.json')));
+    return;
+  }
 
   if (req.mode === 'navigate') {
     event.respondWith(

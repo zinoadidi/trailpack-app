@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("BASE", "http://localhost:8787")
 CODE = os.environ.get("CODE", "TRL-2345-6789-ABCD")
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shots-practice")
+OUT = os.environ.get("OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "shots-practice"))
 TEXT = "A project starts with a goal. A milestone is one point in time. A baseline is the approved plan used to measure progress."
 problems = []
 

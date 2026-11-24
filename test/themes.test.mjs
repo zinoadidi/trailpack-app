@@ -52,6 +52,53 @@ test('system resolves to Grape Night (dark) or Sunrise (light)', () => {
   assert.equal(resolveTheme('dark', true), 'dark');
 });
 
+test('saved theme IDs show the approved palette directions', () => {
+  const pages = { dark: '#0B0716', light: '#FFF6E9', ocean: '#2E3440', matcha: '#F5F7EE' };
+  for (const [id, page] of Object.entries(pages)) {
+    assert.equal(THEMES.find((theme) => theme.id === id).page, page);
+    assert.equal(resolveTheme(id, false), id);
+  }
+});
+
+test('theme picker displays the approved names in every locale', async () => {
+  for (const locale of ['en', 'et', 'es', 'fr', 'fi']) {
+    const strings = JSON.parse(await readFile(new URL(`../src/i18n/${locale}.json`, import.meta.url), 'utf8'));
+    for (const theme of THEMES) {
+      assert.equal(strings[theme.labelKey], theme.name, `${locale}: ${theme.id}`);
+    }
+  }
+});
+
+const luminance = (colour) => {
+  const channels = colour.slice(1).match(/../g).map((c) => parseInt(c, 16) / 255)
+    .map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+};
+
+test('primary button text has at least 4.5:1 contrast in every theme', () => {
+  for (const theme of THEMES) {
+    const block = themeBlock(theme.id);
+    const a = luminance(block.get('--spark'));
+    const b = luminance(block.get('--on-spark'));
+    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    assert.ok(ratio >= 4.5, `${theme.id} primary contrast is ${ratio.toFixed(2)}:1`);
+  }
+});
+
+test('normal and muted text remain readable on page and surface colours', () => {
+  for (const theme of THEMES) {
+    const block = themeBlock(theme.id);
+    for (const text of ['--text', '--muted']) {
+      for (const background of ['--page', '--surface', '--raised']) {
+        const a = luminance(block.get(text));
+        const b = luminance(block.get(background));
+        const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        assert.ok(ratio >= 4.5, `${theme.id} ${text} on ${background}: ${ratio.toFixed(2)}:1`);
+      }
+    }
+  }
+});
+
 test('every concrete theme has its own CSS block with the same colour variables', () => {
   // Fonts and radius are theme independent and only set on :root.
   const UNTHEMED = new Set(['--font-body', '--font-head', '--font-mono', '--radius']);

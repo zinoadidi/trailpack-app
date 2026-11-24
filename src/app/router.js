@@ -10,6 +10,7 @@ const routes = new Map();
 const guards = [];
 let current = null;
 let container = null;
+let renderVersion = 0;
 
 export function register(path, loader) {
   routes.set(path, loader);
@@ -41,12 +42,14 @@ export function navigate(path, { replace = false } = {}) {
 
 export async function render(force = false) {
   if (!container) return;
+  const version = ++renderVersion;
   const hash = location.hash || '#/';
   if (!force && current && current.hash === hash && current.route) {
     current.view?.refresh?.();
     return;
   }
   const mm = match(hash);
+  if (mm) mm.isCurrent = () => version === renderVersion && (location.hash || '#/') === hash;
   const loggedIn = Boolean(state.user);
   for (const g of guards) {
     const forced = g({ mm, loggedIn });
@@ -56,7 +59,7 @@ export async function render(force = false) {
     }
   }
   const route = mm ? await mm.loader(mm) : await routes.get('/*')(mm);
-  if (!route) return;
+  if (!route || version !== renderVersion || (location.hash || '#/') !== hash) return;
   if (current && current.route && current.route.destroy) current.route.destroy();
   clear(container);
   container.className = 'main' + (route.tabs === false ? ' no-tabs' : '');
@@ -66,6 +69,7 @@ export async function render(force = false) {
   document.title = route.title ? `${route.title} · ${t('app.name')}` : t('app.name');
   current = { hash, route, view: route };
   if (route.mount) await route.mount();
+  if (version !== renderVersion || (location.hash || '#/') !== hash) return;
   const heading = route.el.querySelector('h1, h2');
   if (heading) {
     if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
