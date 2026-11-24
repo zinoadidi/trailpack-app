@@ -37,7 +37,7 @@ M4 and are unchanged apart from two small fixes (see `STATUS-M4.md`).
 | `spend(wallet, {campId, kind, itemId, day})` | | `{wallet, spent, reason}` |
 | `earnForStreak(wallet, dayStreak)` | | `{wallet, gained}` |
 
-Points, thresholds and streak rules come from `design/design-and-brand.md`
+Points, thresholds and streak rules come from the private design and brand notes (kept outside this repository)
 sections 4.1 to 4.5. Day keys are **local** days (`YYYY-MM-DD`), never UTC.
 
 ## Achievements
