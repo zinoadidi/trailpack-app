@@ -15,6 +15,7 @@ import { isAccepted, rejectReason, newPack, setSourceState, chunksForSource, wor
 import { parseJsonReply } from '../study/prompts.js';
 import { makeIngest } from '../study/ingest.js';
 import { reviewQueue } from '../study/pack.js';
+import { renderReplacementOffers } from './replacement-offer.js';
 import { listPacks, deletePackDocs, setActivePack, activePackId, savePack, saveDraft, loadDraft, loadFacts, loadTopics } from '../study/store.js';
 
 const ENGINE_STATES = {
@@ -26,6 +27,7 @@ const ENGINE_STATES = {
 export default function library() {
   const root = h('div', { class: 'stack' });
   const packList = h('div', { class: 'stack' });
+  const offers = h('div', { class: 'stack' });
   const status = h('p', { class: 'mut small', 'aria-live': 'polite' });
   const search = h('input', { class: 'input', type: 'search', 'aria-label': t('library.search'), placeholder: t('library.search'), oninput: () => renderList() });
   let listVersion = 0;
@@ -90,6 +92,7 @@ export default function library() {
 
   async function renderList() {
     const version = ++listVersion;
+    await renderReplacementOffers(offers, { onChange: renderList });
     const query = search.value.trim().toLocaleLowerCase();
     const packs = await listPacks();
     if (version !== listVersion) return;
@@ -139,6 +142,7 @@ export default function library() {
     h('div', { class: 'row' }, h('h1', { class: 'h1' }, t('nav.library')), h('button', { class: 'btn p sm', type: 'button', onclick: startPack }, t('library.newPack'))),
     h('p', { class: 'mut' }, t('library.intro')),
     status,
+    offers,
     h('h2', { class: 'h small' }, t('library.packList')),
     search,
     packList,

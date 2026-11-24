@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import { MemoryStore } from '../src/store/idb.js';
 import { createSyncEngine, mergeDocs, docBytes, COLLECTIONS, validId } from '../src/sync/engine.js';
+import { beginAdditionDraft } from '../src/study/additions.js';
+import { saveDraft, publishReplacementDraft, replacementDeletionStatus, deleteReplacedPack, loadPackBundle } from '../src/study/store.js';
 
 /** A fake server: stores docs with revs and a global seq, like /sync. */
 function fakeServer() {
@@ -55,6 +57,39 @@ function fakeServer() {
 function engine(store, server, opts = {}) {
   return createSyncEngine({ store, api: server, now: opts.now || Date.now(), isOnline: opts.isOnline || (() => true) });
 }
+
+test('replacement deletion checks the real sync engine against stale original changes', async () => {
+  const store = new MemoryStore();
+  const server = fakeServer();
+  const sync = engine(store, server);
+  const pack = { id: 'p', title: 'Pack', status: 'frozen', sources: [{ id: 's' }] };
+  const topic = { id: 't', packId: 'p', title: 'Topic' };
+  const fact = { id: 'f', packId: 'p', topicId: 't', statement: 'A fact', variants: [] };
+  const progress = { factId: 'f', packId: 'p', state: 'learning', streak: 2 };
+  await sync.localChange('packs', 'p', pack);
+  await sync.localChange('topics', 't', topic);
+  await sync.localChange('facts', 'f', fact);
+  await sync.localChange('progress', 'p_f', progress);
+  assert.equal((await sync.sync()).status, 'synced');
+  const draft = beginAdditionDraft({ pack, topics: [topic], facts: [fact] });
+  draft.facts.push({ id: 'f2', packId: 'p', topicId: 't', statement: 'New fact' });
+  await saveDraft(draft, { store });
+  const created = await publishReplacementDraft(draft, { store, sync });
+  assert.equal(created.ok, true);
+  assert.equal((await replacementDeletionStatus('p', { store, sync })).ok, true);
+  server.serverWrite('progress', 'p_f', { ...progress, streak: 3 });
+  assert.equal((await deleteReplacedPack('p', { store, sync })).ok, false);
+  assert.ok(await loadPackBundle('p', store));
+  assert.ok(await loadPackBundle(created.packId, store));
+});
+
+test('sync reports when the pagination guard stopped before the last page', async () => {
+  const store = new MemoryStore();
+  const sync = engine(store, { getChanges: async (cursor) => ({ changes: [], cursor: cursor + 1, more: true }) });
+  const result = await sync.sync();
+  assert.equal(result.status, 'synced');
+  assert.equal(result.pullComplete, false);
+});
 
 test('contract collections match the API', () => {
   assert.deepEqual(COLLECTIONS, ['packs', 'facts', 'topics', 'lenses', 'plans', 'progress', 'attempts', 'settings', 'notes', 'generated']);

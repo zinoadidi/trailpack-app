@@ -12,13 +12,16 @@ import { newPack, newSource, sourceId, setSourceState, removeSource, chunksForSo
 import { parseJsonReply } from '../study/prompts.js';
 import { normaliseVariants, safeId, reviewQueue } from '../study/pack.js';
 import { makeIngest } from '../study/ingest.js';
-import { loadPack, savePack, loadTopics, loadFacts, saveTopic, saveFact, loadDraft, saveDraft, clearDraft, setActivePack, deletePackDocs, deleteFactDocs } from '../study/store.js';
+import { loadPack, savePack, loadTopics, loadFacts, saveTopic, saveFact, loadDraft, saveDraft, clearDraft, setActivePack, deletePackDocs, deleteFactDocs, publishReplacementDraft, loadReplacement } from '../study/store.js';
+import { renderReplacementOffers } from './replacement-offer.js';
+import { beginAdditionDraft } from '../study/additions.js';
 import { topicEditor } from './review-edit.js';
 
 export default function review(mm) {
-  const packId = new URLSearchParams((location.hash || '').split('?')[1] || '').get('id');
+  let packId = new URLSearchParams((location.hash || '').split('?')[1] || '').get('id');
   const root = h('div', { class: 'stack' });
   const head = h('div', { class: 'stack' });
+  const offers = h('div', { class: 'stack' });
   const body = h('div', { class: 'stack' });
   const status = h('p', { class: 'mut small', 'aria-live': 'polite' });
   const fileInput = h('input', { type: 'file', multiple: true, accept: acceptAttribute(), style: { display: 'none' } });
@@ -27,11 +30,15 @@ export default function review(mm) {
   let topics = [];
   let facts = [];
   let edits = { dropped: [], renamed: {}, merged: {} };
+  let additionBase = null;
+  let replacementJournal = null;
+  let saveFailed = false;
   let running = false;
 
   const ingest = () => makeIngest({ api: state.api, files: state.files });
 
   function say(text) {
+    if (!text && saveFailed) return;
     status.textContent = text || '';
     if (text) announce(text);
   }
@@ -39,8 +46,20 @@ export default function review(mm) {
   // ------------------------------------------------------- load and save
 
   async function persist({ draftToo = false } = {}) {
+    if (additionBase) {
+      try {
+        await saveDraft({ pack, topics, facts, edits, additionBase });
+        saveFailed = false;
+        return true;
+      } catch {
+        saveFailed = true;
+        say(t('library.additionSaveFailed'));
+        return false;
+      }
+    }
     pack = await savePack(pack);
     if (draftToo) await saveDraft({ pack, topics, facts, edits }).catch(() => null);
+    return true;
   }
 
   async function load() {
@@ -50,11 +69,13 @@ export default function review(mm) {
       return false;
     }
     const draft = await loadDraft(state.store, packId);
+    replacementJournal = await loadReplacement(packId, state.store);
     if (draft && draft.pack) {
       pack = draft.pack;
       topics = draft.topics || [];
       facts = draft.facts || [];
       edits = draft.edits || edits;
+      additionBase = draft.additionBase || null;
       return true;
     }
     pack = await loadPack(state.store, packId);
@@ -66,6 +87,41 @@ export default function review(mm) {
     facts = await loadFacts(state.store, packId);
     if (pack.status === 'frozen') edits = { dropped: [], renamed: {}, merged: {} };
     return true;
+  }
+
+  async function beginAdding() {
+    if (running || pack.status !== 'frozen' || replacementJournal?.choice === 'pending') return;
+    const draft = beginAdditionDraft({ pack, topics, facts });
+    try {
+      await saveDraft(draft);
+      ({ pack, topics, facts, edits, additionBase } = draft);
+      saveFailed = false;
+      say('');
+      render();
+    } catch {
+      saveFailed = true;
+      say(t('library.additionSaveFailed'));
+    }
+  }
+
+  async function discardAdditions() {
+    if (running || !additionBase || additionBase.publicationStarted || replacementJournal?.state === 'creating') return;
+    const ok = await confirmDialog({ title: t('library.discardAdditions'), body: t('library.discardAdditionsHelp'), confirm: t('library.discardAdditions'), cancel: t('common.cancel') });
+    if (!ok) return;
+    try {
+      await clearDraft(pack.id);
+      additionBase = null;
+      saveFailed = false;
+      pack = await loadPack(state.store, pack.id);
+      topics = await loadTopics(state.store, pack.id);
+      facts = await loadFacts(state.store, pack.id);
+      edits = { dropped: [], renamed: {}, merged: {} };
+      say('');
+      render();
+    } catch {
+      saveFailed = true;
+      say(t('library.additionSaveFailed'));
+    }
   }
 
   // ---------------------------------------------------------------- run
@@ -86,7 +142,7 @@ export default function review(mm) {
     }
     const words = wordsOf(extraction);
     pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapping', words, pages: (extraction.pages || []).length || 1 } : s));
-    await persist({ draftToo: true });
+    if (!(await persist({ draftToo: true }))) return false;
     const chunks = chunksForSource(source, extraction, undefined, { preservePages: Boolean(suppliedExtraction) });
     say(t('library.mapping', { name: source.name, count: chunks.length }));
     const state0 = { topics, facts, warnings: [] };
@@ -114,8 +170,7 @@ export default function review(mm) {
     topics = folded.topics;
     facts = folded.facts;
     pack.sources = (pack.sources || []).map((s) => (s.id === source.id ? { ...s, state: 'mapped' } : s));
-    await persist({ draftToo: true });
-    return true;
+    return persist({ draftToo: true });
   }
 
   async function addFiles(fileList) {
@@ -130,8 +185,9 @@ export default function review(mm) {
         }
         const id = sourceId(file.name);
         const source = newSource({ id, name: file.name, type: file.type || 'application/octet-stream', size: file.size, fileId: id });
+        const previousSources = pack.sources;
         pack.sources = [...(pack.sources || []), source];
-        await persist({ draftToo: true });
+        if (!(await persist({ draftToo: true }))) { pack.sources = previousSources; return; }
         render();
         const bytes = new Uint8Array(await file.arrayBuffer());
         await readSource(source, bytes);
@@ -140,21 +196,24 @@ export default function review(mm) {
     } finally {
       running = false;
       say('');
+      render();
     }
   }
 
   async function addPaste() {
+    if (running) return;
     const text = pasteBox.value.trim();
     if (!text) return;
-    const name = (pack.sources || []).length ? t('library.pastedName', { n: (pack.sources || []).length + 1 }) : t('library.pastedName', { n: 1 });
-    const id = sourceId(name);
-    const source = newSource({ id, name, type: 'text/plain', size: text.length, fileId: null });
-    pack.sources = [...(pack.sources || []), source];
-    pasteBox.value = '';
-    await persist({ draftToo: true });
-    render();
     running = true;
     try {
+      const name = (pack.sources || []).length ? t('library.pastedName', { n: (pack.sources || []).length + 1 }) : t('library.pastedName', { n: 1 });
+      const id = sourceId(name);
+      const source = newSource({ id, name, type: 'text/plain', size: text.length, fileId: null });
+      const previousSources = pack.sources;
+      pack.sources = [...(pack.sources || []), source];
+      if (!(await persist({ draftToo: true }))) { pack.sources = previousSources; return; }
+      pasteBox.value = '';
+      render();
       await readSource(source, new TextEncoder().encode(text));
     } finally {
       running = false;
@@ -174,7 +233,7 @@ export default function review(mm) {
       const id = sourceId(name);
       const source = { ...newSource({ id, name, type: 'text/plain', size: new TextEncoder().encode(reply.text).length, fileId: null }), url: reply.url };
       pack.sources = [...(pack.sources || []), source];
-      await persist({ draftToo: true });
+      if (!(await persist({ draftToo: true }))) return;
       if (!(await readSource(source, null, reply))) {
         pack.sources = (pack.sources || []).filter((entry) => entry.id !== id);
         throw new Error('source_mapping_failed');
@@ -183,7 +242,8 @@ export default function review(mm) {
       await persist({ draftToo: true });
     } catch {
       pack.pendingSources = (pack.pendingSources || []).map((entry) => entry.url === item.url ? { ...entry, failed: true } : entry);
-      await saveDraft({ pack, topics, facts, edits }).catch(() => null);
+      if (additionBase) await persist({ draftToo: true });
+      else await saveDraft({ pack, topics, facts, edits }).catch(() => null);
     } finally {
       running = false;
       say('');
@@ -202,12 +262,14 @@ export default function review(mm) {
           h('button', { class: 'btn p sm', type: 'button', disabled: running, onclick: () => importSource(entry) }, t('discover.importSource', { title: entry.title })),
           h('button', { class: 'btn sm', type: 'button', disabled: running, onclick: async () => {
             pack.pendingSources = pack.pendingSources.filter((item) => item.url !== entry.url);
-            await saveDraft({ pack, topics, facts, edits });
+            if (additionBase) await persist({ draftToo: true });
+            else await saveDraft({ pack, topics, facts, edits });
             render();
           } }, t('discover.removeSource', { title: entry.title }))))));
   }
 
   async function removeOne(source) {
+    if (running) return;
     const ok = await confirmDialog({ title: t('library.removeSource'), body: source.name, confirm: t('common.remove'), cancel: t('common.cancel') });
     if (!ok) return;
     pack = removeSource(pack, source.id);
@@ -218,9 +280,44 @@ export default function review(mm) {
   // --------------------------------------------------------------- steps
 
   async function freeze() {
+    if (running) return;
     const check = canFreeze(pack, topics, facts);
     if (!check.ok) {
       toast(t(check.problems[0]));
+      return;
+    }
+    if (additionBase) {
+      const originalSources = new Set(additionBase.sources.map((source) => source.id));
+      if ((pack.sources || []).some((source) => !originalSources.has(source.id) && source.state !== 'mapped')) {
+        say(t('library.additionNotReady'));
+        return;
+      }
+      running = true;
+      let result;
+      try {
+        if (!(await persist({ draftToo: true }))) return;
+        result = await publishReplacementDraft({ pack, topics, facts, edits, additionBase });
+      } finally {
+        running = false;
+      }
+      if (!result.ok) {
+        replacementJournal = await loadReplacement(pack.id, state.store);
+        if (additionBase.publicationStarted || replacementJournal?.state === 'creating') render();
+        say(t(result.reason === 'conflict' ? 'library.additionConflict' : 'library.additionPublishFailed'));
+        return;
+      }
+      additionBase = null;
+      pack = await loadPack(state.store, result.packId);
+      packId = result.packId;
+      replacementJournal = await loadReplacement(packId, state.store);
+      topics = await loadTopics(state.store, pack.id);
+      facts = await loadFacts(state.store, pack.id);
+      edits = { dropped: [], renamed: {}, merged: {} };
+      toast(t('library.frozen'));
+      say(t('library.frozen'));
+      render();
+      await renderReplacementOffers(offers, { packId, onChange: async () => { replacementJournal = await loadReplacement(packId, state.store); render(); } });
+      navigate('/library/review?id=' + encodeURIComponent(packId));
       return;
     }
     const frozen = freezePack(pack, topics, facts, { model: state.user?.model || 'auto' });
@@ -273,6 +370,15 @@ export default function review(mm) {
 
   function render() {
     if (!pack) return;
+    if (additionBase && (additionBase.publicationStarted || replacementJournal?.state === 'creating')) {
+      head.replaceChildren(h('h1', { class: 'h1' }, pack.title || t('library.untitled')));
+      body.replaceChildren(h('div', { class: 'panel stack' },
+        h('p', {}, t('library.replacementRetryHelp')),
+        h('div', { class: 'row wrap' },
+          h('button', { class: 'btn p', type: 'button', onclick: freeze }, t('library.retryAdditions')),
+          h('a', { class: 'btn', href: '#/' }, t('review.startTrail')))));
+      return;
+    }
     const draft = pack.status !== 'frozen';
     const needsReview = reviewQueue(facts, topics).count;
     head.replaceChildren(
@@ -287,7 +393,8 @@ export default function review(mm) {
         ? h(
             'div',
             { class: 'stack' },
-            h('p', { class: 'mut small' }, t('library.reviewHelp')),
+            h('p', { class: 'mut small' }, t(additionBase ? 'library.replacementDraftHelp' : 'library.reviewHelp')),
+            additionBase ? h('button', { class: 'btn sm', type: 'button', onclick: discardAdditions }, t('library.discardAdditions')) : null,
             pendingSources(),
             h(
               'div',
@@ -309,11 +416,10 @@ export default function review(mm) {
               pasteBox,
               h('div', { class: 'row' }, h('span', { class: 'mut small' }, t('library.pasteCounter')), h('button', { class: 'btn sm g', type: 'button', onclick: addPaste }, t('library.pasteAdd'))),
             ),
-            status,
             sourceList(),
             (pack.sources || []).length ? h('div', { class: 'row' }, h('span', { class: 'mut small' }, t('library.stepHint')), h('button', { class: 'btn p sm', type: 'button', onclick: () => navigate('/library/review?id=' + encodeURIComponent(pack.id) + '&edit=1') }, t('library.openReview'))) : null,
           )
-        : h('p', { class: 'mut' }, t('library.frozenHelp')),
+        : h('div', { class: 'stack' }, h('p', { class: 'mut' }, t('library.frozenHelp')), replacementJournal?.choice === 'pending' && pack.id === packId ? null : h('button', { class: 'btn p sm', type: 'button', onclick: beginAdding }, t('library.addMaterial'))),
     );
     body.replaceChildren(topicEditor({
       pack,
@@ -321,9 +427,13 @@ export default function review(mm) {
       facts,
       edits,
       frozen: !draft,
+      additionMode: Boolean(additionBase),
+      busy: Boolean(additionBase) && running,
+      protectedTopicIds: additionBase?.topics.map((topic) => topic.id) || [],
       onChange: async (next) => {
+        if (additionBase && running) return;
         const removed = facts.filter((fact) => !next.facts.some((kept) => kept.id === fact.id));
-        for (const fact of removed) await deleteFactDocs([fact.id], { allFacts: next.facts });
+        if (!additionBase) for (const fact of removed) await deleteFactDocs([fact.id], { allFacts: next.facts });
         edits = next.edits;
         topics = next.topics;
         facts = next.facts;
@@ -368,14 +478,14 @@ export default function review(mm) {
             'div',
             { class: 'row', style: { gap: '6px' } },
             h('span', { class: 'chip ' + (source.state === 'mapped' ? 'm' : source.state.includes('failed') ? 'e' : 'k') }, t('library.state.' + source.state)),
-            pack.status === 'draft' ? h('button', { class: 'btn sm danger', type: 'button', 'aria-label': t('library.removeSource') + ': ' + source.name, onclick: () => removeOne(source) }, t('common.remove')) : null,
+            pack.status === 'draft' && !additionBase?.sources.some((original) => original.id === source.id) ? h('button', { class: 'btn sm danger', type: 'button', disabled: running, 'aria-label': t('library.removeSource') + ': ' + source.name, onclick: () => removeOne(source) }, t('common.remove')) : null,
           ),
         ),
       ),
     );
   }
 
-  root.append(head, fileInput, body);
+  root.append(head, offers, status, fileInput, body);
   fileInput.addEventListener('change', () => {
     addFiles([...fileInput.files]).finally(() => {
       fileInput.value = '';
@@ -388,6 +498,7 @@ export default function review(mm) {
     async mount() {
       const ok = await load();
       if (ok) render();
+      await renderReplacementOffers(offers, { packId, onChange: async () => { replacementJournal = await loadReplacement(packId, state.store); render(); } });
     },
   };
 }

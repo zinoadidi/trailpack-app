@@ -249,7 +249,7 @@ export function createSyncEngine({ store, api, isOnline = () => true, now: clock
       more = Boolean(page.more);
     }
     await setMeta('cursor', cursor);
-    return { changed, cursor };
+    return { changed, cursor, complete: !more };
   }
 
   async function syncOnce({ reset = false } = {}) {
@@ -268,7 +268,7 @@ export function createSyncEngine({ store, api, isOnline = () => true, now: clock
       await setMeta('lastError', null);
       lastError = null;
       setStatus('synced', { changed: pulled.changed + pushed.pushed + pulledAgain.changed });
-      return { status: 'synced', ...pulled, pushed, changed: pulled.changed + pulledAgain.changed };
+      return { status: 'synced', ...pulled, pushed, pullComplete: pulled.complete && pulledAgain.complete, changed: pulled.changed + pulledAgain.changed };
     } catch (err) {
       lastError = err && err.message ? err.message : String(err);
       await setMeta('lastError', lastError);

@@ -24,6 +24,23 @@ function txDone(tx) {
   });
 }
 
+function sameValue(left, right) {
+  const canonical = (value) => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  };
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+function sortedRows(rows) {
+  return [...rows].sort((a, b) => `${a.collection}\u0000${a.id}`.localeCompare(`${b.collection}\u0000${b.id}`));
+}
+
+function tombstone(row) {
+  return { ...row, doc: null, deleted: 1, dirty: 1, baseRev: row.dirty ? row.baseRev ?? null : row.rev ?? null, updatedAt: Date.now() };
+}
+
 export function openDatabase(factory = globalThis.indexedDB, name = DB_NAME) {
   if (!factory) return Promise.reject(new Error('IndexedDB is not available'));
   const open = factory.open(name, DB_VERSION);
@@ -68,6 +85,75 @@ export class IdbStore {
     const tx = this.db.transaction(store, 'readwrite');
     tx.objectStore(store).put(value);
     return txDone(tx);
+  }
+
+  async getOrCreateMeta(key, value) {
+    const tx = this.db.transaction('meta', 'readwrite');
+    const done = txDone(tx);
+    const target = tx.objectStore('meta');
+    const existing = await req(target.get(key));
+    if (existing === undefined) target.add({ key, value });
+    await done;
+    return existing === undefined ? value : existing.value;
+  }
+
+  async keepReplacement(oldId) {
+    const tx = this.db.transaction('meta', 'readwrite');
+    const done = txDone(tx);
+    const meta = tx.objectStore('meta');
+    const row = await req(meta.get('replacement-' + oldId));
+    const allowed = row?.value?.state === 'complete' && row.value.choice === 'pending';
+    if (allowed) meta.delete('replacement-' + oldId);
+    await done;
+    return Boolean(allowed);
+  }
+
+  async finalizeReplacementDraft(oldId, draft, journal) {
+    const tx = this.db.transaction('meta', 'readwrite');
+    const done = txDone(tx);
+    const target = tx.objectStore('meta');
+    const saved = await req(target.get('draft-' + oldId));
+    const current = await req(target.get('replacement-' + oldId));
+    if (current?.value?.state === 'complete' && current.value.packId === journal.packId) {
+      await done;
+      return true;
+    }
+    if (!saved || !sameValue(saved.value, draft)) {
+      await done;
+      return false;
+    }
+    target.put({ key: 'active-pack-id', value: journal.packId });
+    target.delete('draft-' + oldId);
+    target.put({ key: 'replacement-' + oldId, value: { ...journal, state: 'complete' } });
+    await done;
+    return true;
+  }
+
+  async commitReplacementDeletion(journal, expectedDocs, expectedOutbox, targets) {
+    const tx = this.db.transaction(['docs', 'outbox', 'meta'], 'readwrite');
+    const done = txDone(tx);
+    const docs = tx.objectStore('docs');
+    const outbox = tx.objectStore('outbox');
+    const meta = tx.objectStore('meta');
+    const [currentDocs, currentOutbox, currentJournal, active] = await Promise.all([
+      req(docs.getAll()), req(outbox.getAll()), req(meta.get('replacement-' + journal.oldPackId)), req(meta.get('active-pack-id')),
+    ]);
+    if (!sameValue(sortedRows(currentDocs), sortedRows(expectedDocs)) ||
+        !sameValue(sortedRows(currentOutbox), sortedRows(expectedOutbox)) ||
+        !sameValue(currentJournal?.value, journal)) {
+      await done;
+      return false;
+    }
+    const byKey = new Map(currentDocs.map((row) => [row.collection + '\u0000' + row.id, row]));
+    for (const [collection, id] of targets) {
+      const row = byKey.get(collection + '\u0000' + id);
+      docs.put(tombstone(row));
+      outbox.put({ collection, id, queuedAt: Date.now() });
+    }
+    if (active?.value === journal.oldPackId) meta.put({ key: 'active-pack-id', value: journal.packId });
+    meta.put({ key: 'replacement-' + journal.oldPackId, value: { ...journal, choice: 'deleted' } });
+    await done;
+    return true;
   }
 
   async delete(store, key) {
@@ -125,6 +211,49 @@ export class MemoryStore {
   async put(store, value) {
     const key = store === 'docs' || store === 'outbox' ? [value.collection, value.id] : value.key ?? value.id;
     this.data[store].set(MemoryStore.key(store, key), structuredClone(value));
+  }
+
+  async getOrCreateMeta(key, value) {
+    const existing = this.data.meta.get(String(key));
+    if (existing !== undefined) return structuredClone(existing.value);
+    this.data.meta.set(String(key), structuredClone({ key, value }));
+    return structuredClone(value);
+  }
+
+  async keepReplacement(oldId) {
+    const key = 'replacement-' + oldId;
+    const row = this.data.meta.get(key);
+    if (row?.value?.state !== 'complete' || row.value.choice !== 'pending') return false;
+    this.data.meta.delete(key);
+    return true;
+  }
+
+  async finalizeReplacementDraft(oldId, draft, journal) {
+    const saved = this.data.meta.get('draft-' + oldId);
+    const current = this.data.meta.get('replacement-' + oldId);
+    if (current?.value?.state === 'complete' && current.value.packId === journal.packId) return true;
+    if (!saved || !sameValue(saved.value, draft)) return false;
+    this.data.meta.set('active-pack-id', structuredClone({ key: 'active-pack-id', value: journal.packId }));
+    this.data.meta.delete('draft-' + oldId);
+    this.data.meta.set('replacement-' + oldId, structuredClone({ key: 'replacement-' + oldId, value: { ...journal, state: 'complete' } }));
+    return true;
+  }
+
+  async commitReplacementDeletion(journal, expectedDocs, expectedOutbox, targets) {
+    const currentJournal = this.data.meta.get('replacement-' + journal.oldPackId);
+    if (!sameValue(sortedRows([...this.data.docs.values()]), sortedRows(expectedDocs)) ||
+        !sameValue(sortedRows([...this.data.outbox.values()]), sortedRows(expectedOutbox)) ||
+        !sameValue(currentJournal?.value, journal)) return false;
+    for (const [collection, id] of targets) {
+      const key = MemoryStore.key('docs', [collection, id]);
+      this.data.docs.set(key, structuredClone(tombstone(this.data.docs.get(key))));
+      this.data.outbox.set(key, { collection, id, queuedAt: Date.now() });
+    }
+    if (this.data.meta.get('active-pack-id')?.value === journal.oldPackId) {
+      this.data.meta.set('active-pack-id', { key: 'active-pack-id', value: journal.packId });
+    }
+    this.data.meta.set('replacement-' + journal.oldPackId, structuredClone({ key: 'replacement-' + journal.oldPackId, value: { ...journal, choice: 'deleted' } }));
+    return true;
   }
 
   async delete(store, key) {

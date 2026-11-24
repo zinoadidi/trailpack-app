@@ -21,8 +21,9 @@ export function factsByTopic(facts = []) {
   return map;
 }
 
-export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFreeze, onGenerate, onRenamePack, onMakeActive, onDelete }) {
+export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFreeze, onGenerate, onRenamePack, onMakeActive, onDelete, protectedTopicIds = [], additionMode = false, busy = false }) {
   const view = h('div', { class: 'stack' });
+  const protectedTopics = new Set(protectedTopicIds);
   let working = { edits: edits || { dropped: [], renamed: {}, merged: {} }, topics, facts };
 
   function commit(patch) {
@@ -31,6 +32,37 @@ export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFr
     working = { edits: nextEdits, topics: applied.topics, facts: applied.facts };
     onChange(working);
     paint();
+  }
+
+  async function removeFact(fact) {
+    working = { ...working, facts: working.facts.filter((item) => item.id !== fact.id) };
+    await onChange(working);
+    paint();
+  }
+
+  function editFact(fact) {
+    const input = h('textarea', { class: 'input', maxlength: '600', 'aria-label': t('review.editFact'), value: fact.statement });
+    const dialog = h('dialog', { 'aria-labelledby': 'edit-fact-title' });
+    const close = () => { dialog.close(); dialog.remove(); };
+    dialog.append(h('div', { class: 'sheet stack' },
+      h('h2', { id: 'edit-fact-title', class: 'h' }, t('review.editFact')),
+      h('p', { class: 'mut small' }, t('review.editFactHelp')),
+      input,
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', onclick: close }, t('common.cancel')),
+        h('button', { class: 'btn p', type: 'button', onclick: async () => {
+          const statement = input.value.trim();
+          if (!statement) return;
+          close();
+          if (statement === fact.statement) return;
+          working = { ...working, facts: working.facts.map((item) => item.id === fact.id
+            ? { ...item, statement, variants: [], sourceId: null, chunkId: null, page: null, check: 1 } : item) };
+          await onChange(working);
+          paint();
+        } }, t('common.save')))));
+    document.body.append(dialog);
+    dialog.showModal();
+    input.focus();
   }
 
   function rename(topic) {
@@ -133,7 +165,7 @@ export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFr
               h('span', { class: 'chip v' }, t('review.factCount', { count })),
               needsReview.get(topic.id) ? h('span', { class: 'chip a' }, t('flow.needsReviewCount', { count: needsReview.get(topic.id) })) : null,
             ),
-            frozen
+            frozen || busy || protectedTopics.has(topic.id)
               ? null
               : h(
                   'div',
@@ -142,6 +174,10 @@ export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFr
                   h('button', { class: 'btn sm', type: 'button', disabled: list.length < 2, onclick: () => merge(topic) }, t('review.merge')),
                   h('button', { class: 'btn sm danger', type: 'button', onclick: () => drop(topic) }, t('review.drop')),
                 ),
+            additionMode && !frozen ? h('div', { class: 'stack' }, ...(perTopic.get(topic.id) || []).map((fact) =>
+              h('div', { class: 'fact-edit-row' }, h('span', {}, fact.statement),
+                h('button', { class: 'btn sm', type: 'button', disabled: busy, onclick: () => editFact(fact), 'aria-label': t('review.editFact') + ': ' + fact.statement }, t('review.editFact')),
+                h('button', { class: 'btn sm danger', type: 'button', disabled: busy, onclick: () => removeFact(fact), 'aria-label': t('review.removeFact') + ': ' + fact.statement }, t('review.removeFact'))))) : null,
           );
         })
       : [h('p', { class: 'mut small' }, t('review.noTopics'))];
@@ -168,19 +204,20 @@ export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFr
               { class: 'row wrap', style: { gap: '8px' } },
               h('button', { class: 'btn p sm', type: 'button', disabled: variants.complete, onclick: onGenerate }, variants.complete ? t('review.variantsDone') : t('review.generate')),
               h('button', { class: 'btn sm', type: 'button', onclick: onMakeActive }, t('review.makeActive')),
-              h('a', { class: 'btn sm', href: '#/trail' }, t('review.startTrail')),
+              h('a', { class: 'btn sm', href: '#/' }, t('review.startTrail')),
             ),
           )
         : null,
       h(
         'div',
         { class: 'row wrap', style: { gap: '8px' } },
-        frozen ? null : h('button', { class: 'btn p', type: 'button', disabled: !check.ok, onclick: onFreeze }, t('review.freeze')),
+        frozen ? null : h('button', { class: 'btn p', type: 'button', disabled: busy || !check.ok, onclick: onFreeze }, t(additionMode ? 'library.createReplacement' : 'review.freeze')),
         h(
           'button',
           {
             class: 'btn',
             type: 'button',
+            disabled: additionMode,
             onclick: () => {
               const input = h('input', { class: 'input', type: 'text', value: pack.title, maxlength: '160', 'aria-label': t('library.packTitle') });
               const dlg = h('dialog', { 'aria-labelledby': 'ren-p' });
@@ -221,9 +258,9 @@ export function topicEditor({ pack, topics, facts, edits, frozen, onChange, onFr
           },
           t('review.renamePack'),
         ),
-        h('button', { class: 'btn danger', type: 'button', onclick: onDelete }, t('library.deletePack')),
+        additionMode ? null : h('button', { class: 'btn danger', type: 'button', onclick: onDelete }, t('library.deletePack')),
       ),
-      frozen ? null : h('p', { class: 'mut small' }, check.ok ? t('review.freezeHelp') : t(check.problems[0])),
+      frozen ? null : h('p', { class: 'mut small' }, check.ok ? t(additionMode ? 'library.replacementFreezeHelp' : 'review.freezeHelp') : t(check.problems[0])),
     ];
     view.replaceChildren(...children.filter((child) => child !== null && child !== undefined && child !== false));
   }
