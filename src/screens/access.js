@@ -2,7 +2,7 @@
 // the same message for every failure, as the contract requires.
 
 import { state, t } from '../app/state.js';
-import { h, mark, focusables } from '../app/ui.js';
+import { h, mark } from '../app/ui.js';
 import { navigate } from '../app/router.js';
 import { setPref } from '../app/prefs.js';
 import { LANGS } from '../i18n/format.js';
@@ -77,9 +77,11 @@ export default function access() {
     return h(
       'button',
       {
-        class: 'lang' + (selected ? ' sel' : ''),
+        class: 'langpill' + (selected ? ' sel' : ''),
         type: 'button',
+        lang,
         'aria-pressed': String(selected),
+        title: t('languages.' + lang),
         onclick: async () => {
           setPref('lang', lang);
           const { setLanguage } = await import('../app/state.js');
@@ -93,15 +95,15 @@ export default function access() {
           }
         },
       },
-      h('span', { class: 'c2' }, lang.toUpperCase()),
-      h('b', {}, t('languages.' + lang)),
-      selected ? h('span', { class: 'chip m', 'aria-hidden': 'true' }, '✓') : null,
+      h('b', {}, lang.toUpperCase()),
+      h('span', {}, t('languages.' + lang)),
     );
   }
 
   const el = h(
     'div',
     { class: 'authwrap' },
+    h('div', { class: 'langbar', role: 'group', 'aria-label': t('a11y.languageGroup') }, ...LANGS.map(langButton)),
     mark(84, 'access'),
     h('div', {}, h('h1', { class: 'h1 disp' }, t('access.title')), h('p', { class: 'tagline' }, t('app.tagline'))),
     h('div', { class: 'card center' }, h('p', { class: 'sub' }, t('access.invite'))),
@@ -113,28 +115,6 @@ export default function access() {
       submit,
     ),
     h('a', { class: 'btn g block', href: '#/login' }, t('access.haveAccount')),
-    h(
-      'button',
-      {
-        class: 'btn sm',
-        type: 'button',
-        'aria-expanded': 'false',
-        onclick: (e) => {
-          const panel = el.querySelector('.langpanel');
-          const open = panel.hidden;
-          panel.hidden = !open;
-          e.currentTarget.setAttribute('aria-expanded', String(open));
-          if (open) focusables(panel)[0]?.focus();
-        },
-      },
-      t('access.languageBeforeSignIn'),
-    ),
-    h(
-      'div',
-      { class: 'langpanel langlist', hidden: true },
-      h('p', { class: 'hint', id: 'langlabel' }, t('a11y.languageGroup')),
-      ...LANGS.map(langButton),
-    ),
     h('p', { class: 'mut small' }, t('access.lost')),
   );
 
@@ -148,4 +128,3 @@ export default function access() {
   };
 }
 
-void focusables;

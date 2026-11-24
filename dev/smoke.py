@@ -49,16 +49,13 @@ with sync_playwright() as p:
     shot(page, "02-access-error")
 
     # language switch before sign in (Estonian)
-    page.click("button:has-text('Choose a language')")
     page.wait_for_timeout(300)
-    page.click("button.lang:has-text('Eesti')")
+    page.click("button.langpill[lang='et']")
     page.wait_for_timeout(800)
     if "Õppekood" not in page.inner_text("body"):
         problems.append("app language did not switch to Estonian")
     shot(page, "03-access-et")
-    page.click("button:has-text('Vali selle seadme keel')")
-    page.wait_for_timeout(300)
-    page.click("button.lang:has-text('English')")
+    page.click("button.langpill[lang='en']")
     page.wait_for_timeout(800)
 
     # redeem a real code
